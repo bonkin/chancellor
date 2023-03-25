@@ -129,7 +129,7 @@ class PositionTree(object):
         if os.path.exists("../tree.pgn"):
             os.remove("../tree.pgn")
 
-        while possible_moves_stack:
+        while possible_moves_stack and possible_moves_stack[-1]:
             move = Move.from_uci(possible_moves_stack[-1].pop(0))
             board.push(move)
             node = node.add_main_variation(move)
