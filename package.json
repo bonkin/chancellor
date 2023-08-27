@@ -2,6 +2,7 @@
   "name": "chancellor",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://bonkin.github.io/chancellor/",
   "dependencies": {
     "@bity/oauth2-auth-code-pkce": "^2.13.0",
     "@headlessui/react": "^1.7.15",
@@ -40,7 +41,9 @@
     "build:development:local": "npm run clean && source setenv.sh .env.development.local && react-scripts build",
     "build:production:local": "npm run clean && source setenv.sh .env.production.local && react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "npm run build:lichess",
+    "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [

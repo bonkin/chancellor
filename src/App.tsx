@@ -108,8 +108,10 @@ class App extends React.Component<any, AppState> {
     logInToLichess = () => {
         this.setState({
             lichessLoginState: LichessLoginState.Pending
-        })
-        setTimeout(this.state.oauth.fetchAuthorizationCode.bind(this.state.oauth), 150)
+        });
+        console.log('Before setTimeout');
+        setTimeout(() => this.state.oauth.fetchAuthorizationCode.call(this.state.oauth), 1000);
+        console.log('After setTimeout');
     }
 
     logOutOfLichess = () => {
