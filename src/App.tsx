@@ -1,7 +1,6 @@
 import React from 'react';
-import './App.css';
-import {OAuth2AuthCodePKCE} from "@bity/oauth2-auth-code-pkce";
-import {getCookie} from 'typescript-cookie'
+import {HttpClient, OAuth2AuthCodePKCE} from "@bity/oauth2-auth-code-pkce";
+import {getCookie, setCookie, removeCookie} from 'typescript-cookie'
 import Lichess, {Evaluation, MoveData, Variant} from "./logic/Lichess";
 import Board from "./Board";
 // @ts-ignore
@@ -19,7 +18,10 @@ import VariantTile from "./VariantTile";
 import User from "./User";
 import Moves from "./utils/Moves";
 import {QueryButton} from "./QueryButton";
+import AlertDialog from "./AlertDialog";
 
+
+const LICHESS_HOST = 'https://lichess.org';
 
 export enum LichessLoginState {
     LoggedIn,
@@ -31,8 +33,7 @@ export enum LichessLoginState {
 interface AppState {
     lichessLoginState: LichessLoginState;
     lichessLoginName?: string;
-    oauth: OAuth2AuthCodePKCE;
-    fen: string; // The state to hold the FEN representation of the board state
+    fen: string;
     drawable: { shapes: any[] };
     currentMoves: MoveData[];
     variants: Variant[];
@@ -42,6 +43,7 @@ interface AppState {
     isCalculating: boolean;
     calculationStartTime: number;
     searchForColor: 'white' | 'black' | 'default';
+    isDialogOpen: boolean;
 }
 
 interface MoveFrequency {
@@ -50,29 +52,34 @@ interface MoveFrequency {
 }
 
 class App extends React.Component<any, AppState> {
-    // private socket: StrongSocket; // WebSocket instance
-
     private boardApi?: Api;
 
     state: AppState;
     private throttledEstimateTime: _.DebouncedFunc<() => string>;
     private moveFetcher: MoveFetcher;
 
+    oauth: OAuth2AuthCodePKCE;
+    id?: string;
+    username?: string;
+    httpClient?: HttpClient;
+    perfs?: { [key: string]: any };
+
     constructor(props: any) {
-        super(props)
+        super(props);
+
+        this.oauth = new OAuth2AuthCodePKCE({
+            authorizationUrl: `${LICHESS_HOST}/oauth`,
+            tokenUrl: `${LICHESS_HOST}/api/token`,
+            clientId: 'chancellor-chess-app',
+            scopes: ['board:play'],
+            redirectUrl: `${window.location.protocol}//${window.location.host}/chancellor`,
+            onAccessTokenExpiry: refreshAccessToken => refreshAccessToken(),
+            onInvalidGrant: console.warn,
+        });
+
         this.state = {
             lichessLoginState: LichessLoginState.LoggedOut,
-            oauth: new OAuth2AuthCodePKCE({
-                authorizationUrl: 'https://lichess.org/oauth',
-                tokenUrl: 'https://lichess.org/api/token',
-                clientId: 'chancellor-chess-app',
-                scopes: [],
-                redirectUrl: `${window.location.href}?source=lichess`,
-                onAccessTokenExpiry: refreshAccessToken => refreshAccessToken(),
-                onInvalidGrant: _retry => {
-                },
-            }),
-            fen: 'start', // This will hold the FEN representation of the board state
+            fen: 'start',
             drawable: {shapes: []},
             currentMoves: [],
             variants: [],
@@ -82,7 +89,8 @@ class App extends React.Component<any, AppState> {
             isCalculating: false,
             calculationStartTime: 0,
             searchForColor: 'default',
-        }
+            isDialogOpen: false,
+        };
 
         this.throttledEstimateTime = throttle(this.estimateTimeRemaining, 5000);
         this.handleUserStatusChanged = this.handleUserStatusChanged.bind(this)
@@ -92,9 +100,59 @@ class App extends React.Component<any, AppState> {
         this.incrementProgress = this.incrementProgress.bind(this);
         this.drawMoves = this.drawMoves.bind(this);
         this.handleMoveClick = this.handleMoveClick.bind(this);
+        this.closeDialog = this.closeDialog.bind(this);
         this.boardApi = undefined;
 
         this.moveFetcher = new MoveFetcher("");
+
+        this.state.lichessLoginState = LichessLoginState.LoggedOut;
+        this.state.lichessLoginName = undefined;
+    }
+
+    async componentDidMount() {
+        await this.initAuth();
+        if (this.username) {
+            this.setState({
+                lichessLoginName: this.username,
+                lichessLoginState: LichessLoginState.LoggedIn,
+            });
+        }
+    }
+
+    async initAuth() {
+        try {
+            const accessContext = await this.oauth.getAccessToken();
+            if (accessContext) await this.authenticate();
+        } catch (err) {
+            console.error(err);
+        }
+        if (!this.username) {
+            try {
+                const hasAuthCode = await this.oauth.isReturningFromAuthServer();
+                if (hasAuthCode) await this.authenticate();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }
+
+    async authenticate() {
+        try {
+            const httpClient = this.oauth.decorateFetchHTTPClient(window.fetch);
+            const res = await httpClient(`${LICHESS_HOST}/api/account`);
+            const meData = await res.json();
+
+            if (meData.error) throw meData.error;
+
+            this.id = meData.id;
+            this.username = meData.username;
+            this.httpClient = httpClient;
+            this.perfs = meData.perfs;
+
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     updateCurrentMoves = (newMoves: MoveData[]) => {
@@ -105,19 +163,33 @@ class App extends React.Component<any, AppState> {
         });
     }
 
-    logInToLichess = () => {
-        this.setState({
-            lichessLoginState: LichessLoginState.Pending
-        });
-        console.log('Before setTimeout');
-        setTimeout(() => this.state.oauth.fetchAuthorizationCode.call(this.state.oauth), 1000);
-        console.log('After setTimeout');
+    async logInToLichess() {
+        this.setState({lichessLoginState: LichessLoginState.Pending});
+        await this.oauth.fetchAuthorizationCode();
+        if (this.username) {
+            this.setState({
+                lichessLoginName: this.username,
+                lichessLoginState: LichessLoginState.LoggedIn,
+            });
+        } else {
+            this.setState({lichessLoginState: LichessLoginState.LoggedOut});
+        }
     }
 
-    logOutOfLichess = () => {
+    async logOutOfLichess() {
+        if (this.httpClient) {
+            await this.httpClient(`${LICHESS_HOST}/api/token`, {method: 'DELETE'});
+        }
+        localStorage.clear();
+        this.id = undefined;
+        this.username = undefined;
+        this.httpClient = undefined;
+        this.perfs = undefined;
+
         this.setState({
-            lichessLoginState: LichessLoginState.LoggedOut
-        })
+            lichessLoginName: undefined,
+            lichessLoginState: LichessLoginState.LoggedOut,
+        });
     }
 
     handleUserStatusChanged = (state: LichessLoginState, username?: string) => {
@@ -148,76 +220,91 @@ class App extends React.Component<any, AppState> {
     }
 
     async queryTree() {
-        const lichessAccessToken = getCookie('lichess');
-        if (lichessAccessToken) {
-            const lichess = new Lichess(lichessAccessToken);
-            const currentMoves = this.state.currentMoves;
-            this.setState({isCalculating: true});
-            this.setState({calculationStartTime: Date.now()});
-            const searchForColor = this.state.searchForColor;
-            let opponentMoveFrequencies: MoveFrequency[] = [];
-
-            if (searchForColor !== 'default' && searchForColor !== (currentMoves.length % 2 === 0 ? 'white' : 'black')) {
-                // Fetch possible opponent moves
-                const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they');
-                const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
-
-                // Calculate the frequency of each opponent move
-                for (const opponentMove of allOpponentMoves) {
-                    const moveFrequency = Moves.moveOccurrences(opponentMove) / totalOppMoveOccurrences;
-                    opponentMoveFrequencies.push({move: opponentMove, frequency: moveFrequency});
-                }
-            }
-
-            let scenarios: { moves: MoveData[], probability: number}[] = [];
-
-            if (opponentMoveFrequencies.length > 0) {
-                for (const moveFrequency of opponentMoveFrequencies) {
-                    scenarios.push({moves: currentMoves.concat(moveFrequency.move), probability: moveFrequency.frequency});
-                }
+        try {
+            const accessContext = await this.oauth.getAccessToken();
+            const lichessAccessToken = accessContext?.token?.value;
+            if (!lichessAccessToken) {
+                this.setState({isDialogOpen: true});
             } else {
-                scenarios.push({moves: currentMoves, probability: 1});
+                const lichess = new Lichess(lichessAccessToken);
+                const currentMoves = this.state.currentMoves;
+                this.setState({isCalculating: true});
+                this.setState({calculationStartTime: Date.now()});
+                const searchForColor = this.state.searchForColor;
+                let opponentMoveFrequencies: MoveFrequency[] = [];
+
+                if (searchForColor !== 'default' && searchForColor !== (currentMoves.length % 2 === 0 ? 'white' : 'black')) {
+                    // Fetch possible opponent moves
+                    const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they');
+                    const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
+
+                    // Calculate the frequency of each opponent move
+                    for (const opponentMove of allOpponentMoves) {
+                        const moveFrequency = Moves.moveOccurrences(opponentMove) / totalOppMoveOccurrences;
+                        opponentMoveFrequencies.push({move: opponentMove, frequency: moveFrequency});
+                    }
+                }
+
+                let scenarios: { moves: MoveData[], probability: number }[] = [];
+
+                if (opponentMoveFrequencies.length > 0) {
+                    for (const moveFrequency of opponentMoveFrequencies) {
+                        scenarios.push({
+                            moves: currentMoves.concat(moveFrequency.move),
+                            probability: moveFrequency.frequency
+                        });
+                    }
+                } else {
+                    scenarios.push({moves: currentMoves, probability: 1});
+                }
+
+                let allVariants: Variant[] = [];
+
+                for (const scenario of scenarios) {
+                    const openingName = await this.moveFetcher.fetchOpeningName(scenario.moves.map(moveData => moveData.uci));
+                    this.setState({openingName: openingName});
+
+                    const estimatedLeaves = await lichess.countLeafNodes(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves));
+                    this.setState({estimatedLeaves, progress: 0}); // Set the estimation to state and reset progress
+
+                    const results = await lichess.search(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves), this.drawMoves, this.incrementProgress);
+
+                    console.log('Search complete');
+                    console.log('Expected white cp:', parseFloat(results.wcp.statistics.toFixed(1)));
+                    console.log('Expected white win rate:', parseFloat(((scenario.moves.length % 2 === 0 ? results.wwr : WHITE_WIN_RATE - results.wwr) / 10).toFixed(1)));
+
+                    const avgPly = scenario.moves.length + Math.round(results.variants.reduce((acc, variant) => acc + variant.moves.length, 0) / results.variants.length);
+                    console.log(`Avg ply: ${avgPly}, ${scenario.moves.length % 2 === 0 ? 'White' : 'Black'} to move. Calculating derived WWR...`);
+                    const derivedWwr = ChessUtils.expectedPointsPer1000(results.wcp.statistics, avgPly);
+                    console.log(parseFloat((derivedWwr / 10).toFixed(1)));
+
+                    const newVariants: Variant[] = results.variants.map((variant, index) => {
+                        const moves = scenario.moves.concat(variant.moves);
+                        const fen = ChessUtils.playToFEN(moves);
+                        const wcp = `${variant.wcp > 0 ? '+' : ''}${variant.wcp.toFixed(0)}`;
+                        console.log(`${index + 1}. ${moves.map(move => move.san).join(' ')}, ${wcp}, ${(variant.wwr / 10).toFixed(1)}%, ${fen}`);
+
+                        return {moves: moves, wwr: variant.wwr, wcp: variant.wcp};
+                    });
+
+                    allVariants = [...allVariants, ...newVariants];
+                    this.setState({variants: allVariants});
+                }
+                this.setState({isCalculating: false});
             }
-
-            let allVariants: Variant[] = [];
-
-            for (const scenario of scenarios) {
-                const openingName = await this.moveFetcher.fetchOpeningName(scenario.moves.map(moveData => moveData.uci));
-                this.setState({openingName: openingName});
-
-                const estimatedLeaves = await lichess.countLeafNodes(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves));
-                this.setState({estimatedLeaves, progress: 0}); // Set the estimation to state and reset progress
-
-                const results = await lichess.search(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves), this.drawMoves, this.incrementProgress);
-
-                console.log('Search complete');
-                console.log('Expected white cp:', parseFloat(results.wcp.statistics.toFixed(1)));
-                console.log('Expected white win rate:', parseFloat(((scenario.moves.length % 2 === 0 ? results.wwr : WHITE_WIN_RATE - results.wwr) / 10).toFixed(1)));
-
-                const avgPly = scenario.moves.length + Math.round(results.variants.reduce((acc, variant) => acc + variant.moves.length, 0) / results.variants.length);
-                console.log(`Avg ply: ${avgPly}, ${scenario.moves.length % 2 === 0 ? 'White' : 'Black'} to move. Calculating derived WWR...`);
-                const derivedWwr = ChessUtils.expectedPointsPer1000(results.wcp.statistics, avgPly);
-                console.log(parseFloat((derivedWwr / 10).toFixed(1)));
-
-                const newVariants: Variant[] = results.variants.map((variant, index) => {
-                    const moves = scenario.moves.concat(variant.moves);
-                    const fen = ChessUtils.playToFEN(moves);
-                    const wcp = `${variant.wcp > 0 ? '+' : ''}${variant.wcp.toFixed(0)}`;
-                    console.log(`${index + 1}. ${moves.map(move => move.san).join(' ')}, ${wcp}, ${(variant.wwr / 10).toFixed(1)}%, ${fen}`);
-
-                    return {moves: moves, wwr: variant.wwr, wcp: variant.wcp};
-                });
-
-                allVariants = [...allVariants, ...newVariants];
-                this.setState({variants: allVariants});
-            }
-            this.setState({isCalculating: false});
+        } catch (error) {
+            console.error("An error occurred:", error);
+            this.setState({isDialogOpen: true});
         }
     }
 
-    clearShapes = () => {
+    closeDialog() {
+        this.setState({isDialogOpen: false});
+    }
+
+    clearShapes() {
         this.setState({
-            drawable: { shapes: [] }
+            drawable: {shapes: []}
         });
     }
 
@@ -227,10 +314,7 @@ class App extends React.Component<any, AppState> {
     }
 
     handleOptionChange = (option: 'white' | 'black' | 'default') => {
-        this.setState({ searchForColor: option });
-    }
-
-    componentDidUpdate(prevProps: any, prevState: AppState) {
+        this.setState({searchForColor: option});
     }
 
     render() {
@@ -242,7 +326,6 @@ class App extends React.Component<any, AppState> {
                         <User
                             lichessLoginState={this.state.lichessLoginState}
                             lichessLoginName={this.state.lichessLoginName}
-                            onUserStatusChanged={this.handleUserStatusChanged}
                             loginToLichess={this.logInToLichess}
                             logOutOfLichess={this.logOutOfLichess}
                         />
@@ -271,7 +354,7 @@ class App extends React.Component<any, AppState> {
                                     onClick={this.queryTree}
                                     onOptionChange={this.handleOptionChange}
                                 />
-                                <SavePgnButton variants={this.state.variants} openingName={this.state.openingName} />
+                                <SavePgnButton variants={this.state.variants} openingName={this.state.openingName}/>
                             </div>
                         </div>
                         <div className="ml-4 overflow-auto" style={{maxHeight: '1000px'}}>
@@ -287,6 +370,10 @@ class App extends React.Component<any, AppState> {
                         </div>
                     </div>
                 </main>
+                <AlertDialog
+                    isDialogOpen={this.state.isDialogOpen}
+                    onClose={this.closeDialog}
+                />
             </div>
         )
     }

@@ -3,7 +3,7 @@ import NetworkRequestUtils from "./NetworkRequestUtils";
 import Moves from "./Moves";
 
 
-const DATABASE_EXPLORER = process.env.REACT_APP_DATABASE_EXPLORER || 'http://localhost:9002/lichess';
+const DATABASE_EXPLORER = process.env.REACT_APP_DATABASE_EXPLORER || 'http://127.0.0.1:9002/lichess';
 
 class MoveFetcher {
 

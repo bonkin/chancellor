@@ -57,7 +57,7 @@ export type SAN = string;
 export type FENKey = string;
 export type Annotation = '!' | '?' | '!!' | '??' | '!?' | '?!';
 
-const CLOUD_EVAL = process.env.REACT_APP_CLOUD_EVAL || 'http://localhost:9003/api/cloud-eval';
+const CLOUD_EVAL = process.env.REACT_APP_CLOUD_EVAL || 'http://127.0.0.1:9003/api/cloud-eval';
 const STOP_AT_ACCUMULATED_PROB = Number(process.env.REACT_APP_STOP_AT_ACCUMULATED_PROB) || 0.10;
 const MOVES_TO_CONSIDER = Number(process.env.REACT_APP_MOVES_TO_CONSIDER) || 2;
 const SKIP_OPP_MOVES_WITH_PROB: number = Number(process.env.REACT_APP_SKIP_OPP_MOVES_WITH_PROB) || 0.010;

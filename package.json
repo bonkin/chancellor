@@ -2,7 +2,6 @@
   "name": "chancellor",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://bonkin.github.io/chancellor/",
   "dependencies": {
     "@bity/oauth2-auth-code-pkce": "^2.13.0",
     "@headlessui/react": "^1.7.15",
