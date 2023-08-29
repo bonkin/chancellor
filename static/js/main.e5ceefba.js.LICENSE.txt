@@ -1,7 +1,5 @@
 /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/facebook/regenerator/blob/main/LICENSE */
 
-/*! typescript-cookie v1.0.6 | MIT */
-
 /**
  * @license
  * Copyright (c) 2023, Jeff Hlywa (jhlywa@gmail.com)
