@@ -1,46 +1,127 @@
-# Getting Started with Create React App
+# Chancellor: chess opening repertoire builder
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+![UI Interface](docs/ui.png)
 
-## Available Scripts
+Chancellor is a chess opening repertoire builder that assists in creating an opening repertoire for chess players to
+practice and improve their game. The application provides an interface for searching and evaluating chess moves in
+specific openings and allows the generation of PGN files that can be uploaded to training platforms like chessable.com.
 
-In the project directory, you can run:
+## Objective
 
-### `npm start`
+The application aims to build an optimized opening repertoire for you based on the Lichess database, allowing you to
+focus on lines where your opponents are more likely to make mistakes. This is done through a weighted average
+probability to win from a given position, giving you a repertoire not just based on theoretically sound moves but on
+practical pitfalls as well.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## Features
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+- Browse and evaluate different chess openings.
+- Generate PGN files for training.
+- Optimizes your repertoire based on practical play, not just theoretical soundness.
 
-### `npm test`
+## Setup
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Run locally
 
-### `npm run build`
+To run the application locally, use one of the following commands:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+npm run start:development:local
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+or
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm run start:production:local
+```
 
-### `npm run eject`
+### Chess engine setup
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+The best way to create a robust and accurate repertoire is to set up both the Lichess database and a local chess engine
+like Stockfish.
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+#### Lichess database
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+You can download and set up the Lichess openings database locally from
+[here](https://github.com/lichess-org/lila-openingexplorer).
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+It is recommended to reduce the number of plies to ~30 to reduce the size of the database. This can be done by changing
+```rs
+const MAX_PLIES: usize = 30;
+```
+This way you can save your disk space and reduce the time it takes to upload files from 
+[database.lichess.org](https://database.lichess.org/) into the database.
 
-## Learn More
+#### Stockfish engine
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+To run Stockfish locally:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+cd stockfish
+npm install
+npm start # Optionally pass time to think in milliseconds
+```
+
+## How to generate PGN files
+
+1. Use the UI to browse through openings and evaluate moves.
+2. Generate a PGN file based on your selected repertoire.
+3. Import the generated PGN file to Chessable.
+
+![Chessable Import](docs/chessable.png)
+
+Note: While importing to Chessable, set the `Format of variations/games title` to the Event field of the PGN and disable
+the `Import all sub-variations as their own item` option.
+
+## Limitations
+
+- The application uses the Lichess database, which has request limitations. As such, excessive querying may result in
+  temporary bans. The app is demo-ready but not production-ready in this state.
+- For evaluation purposes, the app uses pre-calculated evaluations from Lichess
+  [Cloud Eval API](https://lichess.org/api#tag/Analysis). These are good for demos but not recommended for production
+  use.
+
+## Documentation
+
+- [Lichess API Documentation](https://lichess.org/api)
+
+## Live demo
+
+Check out the live demo [here](https://bonkin.github.io/chancellor/).
+
+## Dependencies
+
+The application relies on several key libraries for functionality and UI:
+
+### Core libraries:
+
+- React: UI Library
+- TypeScript: Static typing for JavaScript
+
+### UI libraries:
+
+- @headlessui/react: A UI framework for React
+- @heroicons/react: A set of SVG icons for React
+
+### Chess specific:
+
+- chess.js: Chess rules engine
+- chessground: Awesome interactive chess board from lichess.org
+
+### Networking and OAuth:
+
+- @bity/oauth2-auth-code-pkce: OAuth2 with PKCE support
+
+### File operations:
+
+- file-saver: File saving utility
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions, issues, and feature requests are welcome. Feel free to check the issues page.
+
+Happy Chess Playing!
