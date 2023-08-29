@@ -1,6 +1,7 @@
 import {Evaluation, MoveData} from "../logic/Lichess";
 import NetworkRequestUtils from "./NetworkRequestUtils";
 import Moves from "./Moves";
+import {STARTING_POSITION} from "../App";
 
 
 const DATABASE_EXPLORER = process.env.REACT_APP_DATABASE_EXPLORER || 'http://127.0.0.1:9002/lichess';
@@ -24,6 +25,9 @@ class MoveFetcher {
     }
 
     async fetchOpeningName(uciMoves: string[]): Promise<string> {
+        if (uciMoves.length === 0) {
+            return STARTING_POSITION;
+        }
         const url = `${DATABASE_EXPLORER}?variant=standard&speeds=&ratings=&topGames=0&recentGames=0&play=${uciMoves.join(',')}`;
         const response = await NetworkRequestUtils.fetchWithRetry(url, this.lichessAccessToken, false, {method: 'GET'});
 

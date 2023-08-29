@@ -21,7 +21,8 @@ import {QueryButton} from "./QueryButton";
 import AlertDialog from "./AlertDialog";
 
 
-const LICHESS_HOST = 'https://lichess.org';
+const LICHESS_HOST: string = 'https://lichess.org';
+export const STARTING_POSITION: string = 'Starting Position';
 
 export enum LichessLoginState {
     LoggedIn,
@@ -83,7 +84,7 @@ class App extends React.Component<any, AppState> {
             drawable: {shapes: []},
             currentMoves: [],
             variants: [],
-            openingName: 'Starting Position',
+            openingName: STARTING_POSITION,
             progress: 0,
             estimatedLeaves: 0,
             isCalculating: false,
