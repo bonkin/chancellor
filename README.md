@@ -89,6 +89,16 @@ the `Import all sub-variations as their own item` option.
 
 Check out the live demo [here](https://bonkin.github.io/chancellor/).
 
+### Limitations in the Live Demo
+
+Please note that the live demo is limited to very low depths of opening lines due to rate limiting enforced by the 
+Lichess API. As such, while the demo provides a snapshot of the application's capabilities, it's not suitable for 
+building a comprehensive and optimized chess repertoire.
+
+For users interested in leveraging the full capabilities of Chancellor to build a robust repertoire, it's recommended 
+to set up a local environment. Details on how to do this are available in the [Chess engine setup](#chess-engine-setup) 
+section of this README.
+
 ## Dependencies
 
 The application relies on several key libraries for functionality and UI:

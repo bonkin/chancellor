@@ -98,6 +98,7 @@ class App extends React.Component<any, AppState> {
         this.logInToLichess = this.logInToLichess.bind(this)
         this.logOutOfLichess = this.logOutOfLichess.bind(this)
         this.queryTree = this.queryTree.bind(this);
+        this.checkAuthAndQueryTree = this.checkAuthAndQueryTree.bind(this);
         this.incrementProgress = this.incrementProgress.bind(this);
         this.drawMoves = this.drawMoves.bind(this);
         this.handleMoveClick = this.handleMoveClick.bind(this);
@@ -125,7 +126,7 @@ class App extends React.Component<any, AppState> {
             const accessContext = await this.oauth.getAccessToken();
             if (accessContext) await this.authenticate();
         } catch (err) {
-            console.error(err);
+            console.warn(err);
         }
         if (!this.username) {
             try {
@@ -220,87 +221,108 @@ class App extends React.Component<any, AppState> {
         return TimeFormatter.formatTime(Math.round(remainingMillis / 1000));
     }
 
+    async getAccessToken(): Promise<string | undefined> {
+        return this.oauth.getAccessToken().then(accessContext => {
+            const lichessAccessToken = accessContext?.token?.value;
+            if (lichessAccessToken) {
+                return lichessAccessToken;
+            } else {
+                return undefined;
+            }
+        }).catch(error => {
+            console.warn("An error occurred while fetching the access token:", error);
+            return undefined;
+        });
+    }
+
+    async checkAuthAndQueryTree() {
+        this.getAccessToken().then(accessToken => {
+            if (accessToken) {
+                this.queryTree();
+            } else {
+                this.setState({isDialogOpen: true});
+            }
+        });
+    }
+
     async queryTree() {
         try {
-            const accessContext = await this.oauth.getAccessToken();
-            const lichessAccessToken = accessContext?.token?.value;
-            if (!lichessAccessToken) {
-                this.setState({isDialogOpen: true});
-            } else {
-                const lichess = new Lichess(lichessAccessToken);
-                const currentMoves = this.state.currentMoves;
-                this.setState({isCalculating: true});
-                this.setState({calculationStartTime: Date.now()});
-                const searchForColor = this.state.searchForColor;
-                let opponentMoveFrequencies: MoveFrequency[] = [];
+            const lichessAccessToken = await this.getAccessToken() ?? "";
+            const lichess = new Lichess(lichessAccessToken);
+            const currentMoves = this.state.currentMoves;
+            this.setState({isCalculating: true});
+            this.setState({calculationStartTime: Date.now()});
+            const searchForColor = this.state.searchForColor;
+            let opponentMoveFrequencies: MoveFrequency[] = [];
 
-                if (searchForColor !== 'default' && searchForColor !== (currentMoves.length % 2 === 0 ? 'white' : 'black')) {
-                    // Fetch possible opponent moves
-                    const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they');
-                    const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
+            if (searchForColor !== 'default' && searchForColor !== (currentMoves.length % 2 === 0 ? 'white' : 'black')) {
+                // Fetch possible opponent moves
+                const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they');
+                const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
 
-                    // Calculate the frequency of each opponent move
-                    for (const opponentMove of allOpponentMoves) {
-                        const moveFrequency = Moves.moveOccurrences(opponentMove) / totalOppMoveOccurrences;
-                        opponentMoveFrequencies.push({move: opponentMove, frequency: moveFrequency});
-                    }
+                // Calculate the frequency of each opponent move
+                for (const opponentMove of allOpponentMoves) {
+                    const moveFrequency = Moves.moveOccurrences(opponentMove) / totalOppMoveOccurrences;
+                    opponentMoveFrequencies.push({move: opponentMove, frequency: moveFrequency});
                 }
-
-                let scenarios: { moves: MoveData[], probability: number }[] = [];
-
-                if (opponentMoveFrequencies.length > 0) {
-                    for (const moveFrequency of opponentMoveFrequencies) {
-                        scenarios.push({
-                            moves: currentMoves.concat(moveFrequency.move),
-                            probability: moveFrequency.frequency
-                        });
-                    }
-                } else {
-                    scenarios.push({moves: currentMoves, probability: 1});
-                }
-
-                let allVariants: Variant[] = [];
-
-                for (const scenario of scenarios) {
-                    const openingName = await this.moveFetcher.fetchOpeningName(scenario.moves.map(moveData => moveData.uci));
-                    this.setState({openingName: openingName});
-
-                    const estimatedLeaves = await lichess.countLeafNodes(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves));
-                    this.setState({estimatedLeaves, progress: 0}); // Set the estimation to state and reset progress
-
-                    const results = await lichess.search(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves), this.drawMoves, this.incrementProgress);
-
-                    console.log('Search complete');
-                    console.log('Expected white cp:', parseFloat(results.wcp.statistics.toFixed(1)));
-                    console.log('Expected white win rate:', parseFloat(((scenario.moves.length % 2 === 0 ? results.wwr : WHITE_WIN_RATE - results.wwr) / 10).toFixed(1)));
-
-                    const avgPly = scenario.moves.length + Math.round(results.variants.reduce((acc, variant) => acc + variant.moves.length, 0) / results.variants.length);
-                    console.log(`Avg ply: ${avgPly}, ${scenario.moves.length % 2 === 0 ? 'White' : 'Black'} to move. Calculating derived WWR...`);
-                    const derivedWwr = ChessUtils.expectedPointsPer1000(results.wcp.statistics, avgPly);
-                    console.log(parseFloat((derivedWwr / 10).toFixed(1)));
-
-                    const newVariants: Variant[] = results.variants.map((variant, index) => {
-                        const moves = scenario.moves.concat(variant.moves);
-                        const fen = ChessUtils.playToFEN(moves);
-                        const wcp = `${variant.wcp > 0 ? '+' : ''}${variant.wcp.toFixed(0)}`;
-                        console.log(`${index + 1}. ${moves.map(move => move.san).join(' ')}, ${wcp}, ${(variant.wwr / 10).toFixed(1)}%, ${fen}`);
-
-                        return {moves: moves, wwr: variant.wwr, wcp: variant.wcp};
-                    });
-
-                    allVariants = [...allVariants, ...newVariants];
-                    this.setState({variants: allVariants});
-                }
-                this.setState({isCalculating: false});
             }
+
+            let scenarios: { moves: MoveData[], probability: number }[] = [];
+
+            if (opponentMoveFrequencies.length > 0) {
+                for (const moveFrequency of opponentMoveFrequencies) {
+                    scenarios.push({
+                        moves: currentMoves.concat(moveFrequency.move),
+                        probability: moveFrequency.frequency
+                    });
+                }
+            } else {
+                scenarios.push({moves: currentMoves, probability: 1});
+            }
+
+            let allVariants: Variant[] = [];
+
+            for (const scenario of scenarios) {
+                const openingName = await this.moveFetcher.fetchOpeningName(scenario.moves.map(moveData => moveData.uci));
+                this.setState({openingName: openingName});
+
+                const estimatedLeaves = await lichess.countLeafNodes(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves));
+                this.setState({estimatedLeaves, progress: 0}); // Set the estimation to state and reset progress
+
+                const results = await lichess.search(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves), this.drawMoves, this.incrementProgress);
+
+                console.log('Search complete');
+                console.log('Expected white cp:', parseFloat(results.wcp.statistics.toFixed(1)));
+                console.log('Expected win rate:', parseFloat(((scenario.moves.length % 2 === 0 ? results.wwr : WHITE_WIN_RATE - results.wwr) / 10).toFixed(1)));
+
+                const avgPly = scenario.moves.length + Math.round(results.variants.reduce((acc, variant) => acc + variant.moves.length, 0) / results.variants.length);
+                console.log(`Avg ply: ${avgPly}, ${scenario.moves.length % 2 === 0 ? 'White' : 'Black'} to move. Calculating derived WWR...`);
+                const derivedWwr = ChessUtils.expectedPointsPer1000(results.wcp.statistics, avgPly);
+                console.log(parseFloat((derivedWwr / 10).toFixed(1)));
+
+                const newVariants: Variant[] = results.variants.map((variant, index) => {
+                    const moves = scenario.moves.concat(variant.moves);
+                    const fen = ChessUtils.playToFEN(moves);
+                    const wcp = `${variant.wcp > 0 ? '+' : ''}${variant.wcp.toFixed(0)}`;
+                    console.log(`${index + 1}. ${moves.map(move => move.san).join(' ')}, ${wcp}, ${(variant.wwr / 10).toFixed(1)}%, ${fen}`);
+
+                    return {moves: moves, wwr: variant.wwr, wcp: variant.wcp};
+                });
+
+                allVariants = [...allVariants, ...newVariants];
+                this.setState({variants: allVariants});
+            }
+            this.setState({isCalculating: false});
+
         } catch (error) {
             console.error("An error occurred:", error);
             this.setState({isDialogOpen: true});
         }
     }
 
-    closeDialog() {
+    async closeDialog() {
         this.setState({isDialogOpen: false});
+        await this.queryTree();
     }
 
     clearShapes() {
@@ -352,7 +374,7 @@ class App extends React.Component<any, AppState> {
                             />
                             <div className="flex space-x-4">
                                 <QueryButton
-                                    onClick={this.queryTree}
+                                    onClick={this.checkAuthAndQueryTree}
                                     onOptionChange={this.handleOptionChange}
                                 />
                                 <SavePgnButton variants={this.state.variants} openingName={this.state.openingName}/>

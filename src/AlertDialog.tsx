@@ -26,7 +26,6 @@ class AlertDialog extends Component<AlertDialogProps> {
                                 <Dialog.Overlay className="fixed inset-0 bg-black opacity-30"/>
                             </Transition.Child>
 
-                            {/* This element is to trick the browser into centering the modal contents. */}
                             <span className="inline-block h-screen align-middle" aria-hidden="true">&#8203;</span>
 
                             <Transition.Child
@@ -45,7 +44,8 @@ class AlertDialog extends Component<AlertDialogProps> {
                                     </Dialog.Title>
                                     <div className="mt-2">
                                         <p className="text-sm text-gray-500">
-                                            We could not find a valid Lichess access token. Please log in again.
+                                            It is recommended to log in to your Lichess account to use this app for an optimized experience.
+                                            Please be aware that both logged-in and guest users are subject to API rate limitations from Lichess.
                                         </p>
                                     </div>
                                     <div className="mt-4">

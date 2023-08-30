@@ -87,7 +87,9 @@ function Board({
 
 
     useEffect(() => {
-        console.log(currentMoves.map(move => move.san).join(' '));
+        if (currentMoves.length > 0) {
+            console.log(currentMoves.map(move => move.san).join(' '));
+        }
     }, [currentMoves]);
 
     useEffect(() => {
@@ -102,7 +104,7 @@ function Board({
         }
         api?.set({
             fen: chess.fen(),
-            movable: { dests: legalMovesToDests() }
+            movable: {dests: legalMovesToDests()}
         });
     }, [externalMoves]);
 
