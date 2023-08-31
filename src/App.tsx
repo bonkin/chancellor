@@ -19,6 +19,7 @@ import User from "./User";
 import Moves from "./utils/Moves";
 import {QueryButton} from "./QueryButton";
 import AlertDialog from "./AlertDialog";
+import ProgressBar from "./ProgressBar";
 
 
 const LICHESS_HOST: string = 'https://lichess.org';
@@ -354,16 +355,12 @@ class App extends React.Component<any, AppState> {
                         />
                     </div>
                 </header>
-                <div
+                <ProgressBar
+                    isCalculating={this.state.isCalculating}
+                    progress={this.state.progress}
+                    estimatedLeaves={this.state.estimatedLeaves}
                     title={this.throttledEstimateTime()}
-                    className="relative pt-0">
-                    <div className="overflow-hidden h-2 text-xs flex bg-transparent mb-4">
-                        <div
-                            style={{width: `${this.state.isCalculating ? (this.state.progress / this.state.estimatedLeaves) * 100 : this.state.estimatedLeaves ? 100 : 0}%`}}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-purple-600 ${this.state.isCalculating ? 'shimmer-effect' : ''}`}>
-                        </div>
-                    </div>
-                </div>
+                />
                 <main className="container mx-auto mt-4">
                     <div className="flex">
                         {/* Adjusting board width based on screen sizes */}
