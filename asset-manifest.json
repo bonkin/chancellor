@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/chancellor/static/css/main.03d65aab.css",
-    "main.js": "/chancellor/static/js/main.89bd4f7f.js",
+    "main.css": "/chancellor/static/css/main.e2d6db0e.css",
+    "main.js": "/chancellor/static/js/main.63a53587.js",
     "static/js/787.11c076d5.chunk.js": "/chancellor/static/js/787.11c076d5.chunk.js",
     "index.html": "/chancellor/index.html",
-    "main.03d65aab.css.map": "/chancellor/static/css/main.03d65aab.css.map",
-    "main.89bd4f7f.js.map": "/chancellor/static/js/main.89bd4f7f.js.map",
+    "main.e2d6db0e.css.map": "/chancellor/static/css/main.e2d6db0e.css.map",
+    "main.63a53587.js.map": "/chancellor/static/js/main.63a53587.js.map",
     "787.11c076d5.chunk.js.map": "/chancellor/static/js/787.11c076d5.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.03d65aab.css",
-    "static/js/main.89bd4f7f.js"
+    "static/css/main.e2d6db0e.css",
+    "static/js/main.63a53587.js"
   ]
 }
