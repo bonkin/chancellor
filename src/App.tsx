@@ -342,7 +342,7 @@ class App extends React.Component<any, AppState> {
 
     render() {
         return (
-            <div>
+            <div className="flex flex-col h-screen">
                 <header className="relative p-2 bg-blue-500 text-white flex justify-center items-center">
                     <div className="text-xl">{this.state.openingName}</div>
                     <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -366,21 +366,25 @@ class App extends React.Component<any, AppState> {
                 </div>
                 <main className="container mx-auto mt-4">
                     <div className="flex">
-                        <div>
-                            <Board
-                                config={{drawable: this.state.drawable}}
-                                onMovesUpdate={this.updateCurrentMoves}
-                                externalMoves={this.state.currentMoves}
-                            />
-                            <div className="flex space-x-4">
-                                <QueryButton
-                                    onClick={this.checkAuthAndQueryTree}
-                                    onOptionChange={this.handleOptionChange}
+                        {/* Adjusting board width based on screen sizes */}
+                        <div className="relative w-8/12 sm:w-7/12 md:w-7/12 lg:w-6/12">
+                            <div className="board-container" style={{width: '90%', margin: '0 auto'}}>
+                                <Board
+                                    config={{drawable: this.state.drawable}}
+                                    onMovesUpdate={this.updateCurrentMoves}
+                                    externalMoves={this.state.currentMoves}
                                 />
-                                <SavePgnButton variants={this.state.variants} openingName={this.state.openingName}/>
+                                <div className="flex justify-start space-x-4 p-4 pl-0">
+                                    <QueryButton
+                                        onClick={this.checkAuthAndQueryTree}
+                                        onOptionChange={this.handleOptionChange}
+                                    />
+                                    <SavePgnButton variants={this.state.variants} openingName={this.state.openingName}/>
+                                </div>
                             </div>
                         </div>
-                        <div className="ml-4 overflow-auto" style={{maxHeight: '1000px'}}>
+                        {/* Adjusting variants section to occupy the remaining part */}
+                        <div className="w-4/12 sm:w-5/12 md:w-5/12 lg:w-6/12 ml-4 overflow-auto">
                             {this.state.variants.map((variant, index) => (
                                 <VariantTile
                                     key={index}
@@ -398,7 +402,7 @@ class App extends React.Component<any, AppState> {
                     onClose={this.closeDialog}
                 />
             </div>
-        )
+        );
     }
 }
 

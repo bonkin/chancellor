@@ -108,11 +108,26 @@ function Board({
         });
     }, [externalMoves]);
 
+    useEffect(() => {
+        const handleResize = () => {
+            api?.redrawAll();
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [api]);
+
     return (
-        <div style={{height: contained ? '100%' : height, width: contained ? '100%' : width}}>
-            <div ref={ref} style={{height: '100%', width: '100%', display: 'table'}}/>
+        <div style={{width: '100%', margin: 'auto'}}>
+            <div style={{ paddingTop: '100%', position: 'relative'}}>
+                <div ref={ref} style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0}} />
+            </div>
         </div>
     );
+
 }
 
 export default Board;
