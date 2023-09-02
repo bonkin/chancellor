@@ -381,7 +381,9 @@ class App extends React.Component<any, AppState> {
                             </div>
                         </div>
                         {/* Adjusting variants section to occupy the remaining part */}
-                        <div className="w-4/12 sm:w-5/12 md:w-5/12 lg:w-6/12 ml-4 overflow-auto">
+                        <div
+                            className="w-4/12 sm:w-5/12 md:w-5/12 lg:w-6/12 ml-4"
+                            style={{ maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
                             {this.state.variants.map((variant, index) => (
                                 <VariantTile
                                     key={index}

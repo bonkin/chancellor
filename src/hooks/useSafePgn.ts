@@ -2,6 +2,7 @@ import {saveAs} from 'file-saver';
 import {useState} from 'react';
 import MoveFetcher from "../utils/MoveFetcher";
 import {MoveData, Variant} from "../logic/Lichess";
+import ChessUtils from "../utils/ChessUtils";
 
 
 const MAX_VARIANTS_PER_FILE: number = 100;
@@ -11,28 +12,6 @@ function useSavePgn(variants: Variant[], openingName: string) {
 
     async function savePgn() {
         setIsSaving(true);
-
-        const getGameResult = (wcp: number) => {
-            if (wcp > 300) {
-                return '+-'; // White has a decisive advantage
-            } else if (wcp > 150) {
-                return '±'; // White has a significant advantage
-            } else if (wcp > 50) {
-                return '⩲'; // White has a moderate advantage
-            } else if (wcp >= -50) {
-                return '='; // Even position
-            } else if (wcp >= -150) {
-                return '⩱'; // White has a moderate advantage
-            } else if (wcp >= -300) {
-                return '∓'; // Black has a significant advantage
-            } else {
-                return '-+'; // Black has a decisive advantage
-            }
-        };
-
-        const isCheckmateMove = (san: string) => {
-            return san.endsWith('#');
-        }
 
         let pgnData = '';
         const moveFetcher = new MoveFetcher("");
@@ -50,8 +29,8 @@ function useSavePgn(variants: Variant[], openingName: string) {
                 }
                 return ((startIndex + i) % 2 === 0 ? `${((startIndex + i) / 2) + 1}.${san}` : san);
             }).join(' ');
-            if (!isCheckmateMove(variant.moves[variant.moves.length - 1].san)) {
-                line += ` ${getGameResult(variant.wcp)}`;
+            if (!ChessUtils.isCheckmateMove(variant.moves[variant.moves.length - 1].san)) {
+                line += ` ${ChessUtils.getGameResult(variant.wcp)}`;
             }
 
             return startIndex % 2 === 1 ? `${Math.floor((startIndex + variant.moves.length) / 2) + 1}...${line}` : line;

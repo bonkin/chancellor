@@ -115,6 +115,28 @@ class ChessUtils {
         const drawRate = 1000 - ourWinRate - oppWinRate;
         return ourWinRate + drawRate / 2;
     }
+
+    static getGameResult(wcp: number): '∓' | '⩱' | '±' | '=' | '⩲' | '+-' | '-+' {
+        if (wcp > 300) {
+            return '+-'; // White has a decisive advantage
+        } else if (wcp > 150) {
+            return '±'; // White has a significant advantage
+        } else if (wcp > 50) {
+            return '⩲'; // White has a moderate advantage
+        } else if (wcp >= -50) {
+            return '='; // Even position
+        } else if (wcp >= -150) {
+            return '⩱'; // White has a moderate advantage
+        } else if (wcp >= -300) {
+            return '∓'; // Black has a significant advantage
+        } else {
+            return '-+'; // Black has a decisive advantage
+        }
+    };
+
+    static isCheckmateMove(san: string): boolean {
+        return san.endsWith('#');
+    }
 }
 
 export default ChessUtils;

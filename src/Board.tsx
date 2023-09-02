@@ -16,10 +16,7 @@ interface Props {
 }
 
 function Board({
-                   width = 900,
-                   height = 900,
                    config = {},
-                   contained = false,
                    onMovesUpdate,
                    externalMoves,
                }: Props) {
@@ -122,8 +119,8 @@ function Board({
 
     return (
         <div style={{width: '100%', margin: 'auto'}}>
-            <div style={{ paddingTop: '100%', position: 'relative'}}>
-                <div ref={ref} style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0}} />
+            <div style={{paddingTop: '100%', position: 'relative'}}>
+                <div ref={ref} style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0}}/>
             </div>
         </div>
     );

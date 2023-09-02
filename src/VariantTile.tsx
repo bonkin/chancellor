@@ -1,14 +1,15 @@
 import React from 'react';
-import {MoveData} from "./logic/Lichess";
+import {MoveData, Variant} from "./logic/Lichess";
+import ChessUtils from "./utils/ChessUtils";
 
 interface VariantTileProps {
-    variant: { moves: MoveData[] };
+    variant: Variant;
     index: number;
     totalVariants: number;
     onMoveClick: (pv: MoveData[]) => void;
 }
 
-const VariantTile: React.FC<VariantTileProps> = ({ variant, index, totalVariants, onMoveClick }) => {
+const VariantTile: React.FC<VariantTileProps> = ({variant, index, totalVariants, onMoveClick}) => {
     return (
         <div
             className="p-3 m-2 rounded-sm bg-blue-50 hover:shadow-lg"
@@ -19,7 +20,8 @@ const VariantTile: React.FC<VariantTileProps> = ({ variant, index, totalVariants
             </sup>
 
             <div className="flex flex-wrap cursor-pointer hover:text-blue-500">
-                {variant.moves.map((moveData: MoveData, moveIndex: number) => {
+                {variant.moves.map((move: MoveData, moveIndex: number) => {
+                    const san = `${move.san}${move.annotation || ''}`;
                     const moveNum = Math.floor(moveIndex / 2) + 1;
                     const isWhiteMove = moveIndex % 2 === 0;
                     return (
@@ -33,11 +35,12 @@ const VariantTile: React.FC<VariantTileProps> = ({ variant, index, totalVariants
                                     onMoveClick(pv);
                                 }}
                             >
-                                {moveData.san}
+                                {san}
                             </span>
                         </div>
                     );
                 })}
+                <span className="text-black"> {ChessUtils.getGameResult(variant.wcp)} </span>
             </div>
         </div>
     );
