@@ -60,6 +60,7 @@ export type Annotation = '!' | '?' | '!!' | '??' | '!?' | '?!';
 const CLOUD_EVAL = process.env.REACT_APP_CLOUD_EVAL || 'http://127.0.0.1:9003/api/cloud-eval';
 const STOP_AT_ACCUMULATED_PROB = Number(process.env.REACT_APP_STOP_AT_ACCUMULATED_PROB) || 0.10;
 const MOVES_TO_CONSIDER = Number(process.env.REACT_APP_MOVES_TO_CONSIDER) || 2;
+const ADDITIONAL_MOVES_AT_ROOT = Number(process.env.REACT_APP_ADDITIONAL_MOVES_AT_ROOT) || 0;
 const SKIP_OPP_MOVES_WITH_PROB: number = Number(process.env.REACT_APP_SKIP_OPP_MOVES_WITH_PROB) || 0.010;
 const CONSIDER_SOLID_MOVE_PROB: number = Number(process.env.REACT_APP_CONSIDER_SOLID_MOVE_PROB) || 0.100;
 const CLEAR_BEST_MOVE_PROB: number = Number(process.env.REACT_APP_CLEAR_BEST_MOVE_PROB) || 0.70;
@@ -171,7 +172,9 @@ class Lichess {
         // Loop through the moves and remain first MOVES_TO_CONSIDER with evaluation > MIN_EVAL_DIFF_TO_CONSIDER
         const chess = new Chess.Chess(fen);
         for (const move of sortedMoves) {
-            if (moves.length >= MOVES_TO_CONSIDER) {
+            // Increase number moves to consider if we're at the root node
+            const isRootMove = probability === 1;
+            if (moves.length >= MOVES_TO_CONSIDER + (isRootMove ? ADDITIONAL_MOVES_AT_ROOT : 0)) {
                 break;
             }
             const moveFrequency = Moves.moveOccurrences(move) / totalMoveOccurrences;
@@ -363,7 +366,9 @@ class Lichess {
         let moveCount = 0;
         const chess = new Chess.Chess(fen);
         for (const move of sortedMoves) {
-            if (moveCount >= MOVES_TO_CONSIDER) {
+            // Increase number moves to consider if we're at the root node
+            const isRootMove = probability === 1;
+            if (moveCount >= MOVES_TO_CONSIDER + (isRootMove ? ADDITIONAL_MOVES_AT_ROOT : 0)) {
                 break;
             }
             const moveFrequency = Moves.moveOccurrences(move) / totalMoveOccurrences;
