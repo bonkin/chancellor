@@ -1,6 +1,7 @@
 import * as cg from "chessground/types";
 import * as Chess from "chess.js";
 import {MoveData, SAN} from "../logic/Lichess";
+import {Square, SQUARES} from "chess.js";
 
 
 const INF_CP = 4000;
@@ -8,6 +9,8 @@ const DRAW_WIN_RATE = 500;
 const UNDEFINED_WIN_RATE = 500;
 const WHITE_WIN_RATE = 1000;
 const BLACK_WIN_RATE = 0;
+
+type ChessPiece = 'p' | 'P' | 'n' | 'N' | 'b' | 'B' | 'r' | 'R' | 'q' | 'Q' | 'k' | 'K';
 
 class ChessUtils {
 
@@ -137,6 +140,87 @@ class ChessUtils {
     static isCheckmateMove(san: string): boolean {
         return san.endsWith('#');
     }
+
+    private static isChessPiece(piece: string): piece is ChessPiece {
+        return ['p', 'P', 'n', 'N', 'b', 'B', 'r', 'R', 'q', 'Q', 'k', 'K'].includes(piece);
+    }
+
+    static getMaterialValueCP(chess: Chess.Chess): number {
+        const pieces = chess.fen().split(" ")[0];
+        const materialValues: Record<ChessPiece, number> = {
+            'p': -100, 'P': +100,
+            'n': -300, 'N': +300,
+            'b': -300, 'B': +300,
+            'r': -500, 'R': +500,
+            'q': -900, 'Q': +900,
+            'k': 0, 'K': 0,
+        };
+
+        return [...pieces]
+            .filter(ChessUtils.isChessPiece)
+            .reduce((acc: number, piece: ChessPiece) => acc + materialValues[piece], 0);
+    };
+
+    static pawnsThreatenOpponentPiece(chess: Chess.Chess, ourColor: 'w' | 'b'): boolean {
+        const opponentColor = ourColor === 'w' ? 'b' : 'w';
+
+        // Get squares of our pawns
+        const ourPawns = SQUARES.filter(square => {
+            const piece = chess.get(square);
+            return piece && piece.color === ourColor && piece.type === 'p';
+        });
+
+        // Get squares of opponent's pieces (excluding pawns)
+        const opponentPieces = SQUARES.filter(square => {
+            const piece = chess.get(square);
+            return piece && piece.color === opponentColor && piece.type !== 'p';
+        });
+
+        // Check if any of our pawns threaten any opponent piece
+        for (const pawnSquare of ourPawns) {
+            const attackedSquares = this.getPawnAttackedSquares(pawnSquare, ourColor, chess);
+            for (const attackedSquare of attackedSquares) {
+                if (opponentPieces.includes(attackedSquare)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    static getPawnAttackedSquares(pawnSquare: Chess.Square, ourColor: 'w' | 'b', chess: Chess.Chess): Chess.Square[] {
+        const file = pawnSquare.charCodeAt(0);
+        const rank = parseInt(pawnSquare[1], 10);
+
+        let attackedSquares: Chess.Square[] = [];
+
+        const a = 97; // 'a' in char code
+        const h = 104; // 'h' in char code
+        if (ourColor === 'w') {
+            if (file > a) { // 'a' in char code
+                attackedSquares.push((String.fromCharCode(file - 1) + (rank + 1)) as Chess.Square);
+            }
+            if (file < h) {
+                attackedSquares.push((String.fromCharCode(file + 1) + (rank + 1)) as Chess.Square);
+            }
+        } else {
+            if (file > a) {
+                attackedSquares.push((String.fromCharCode(file - 1) + (rank - 1)) as Chess.Square);
+            }
+            if (file < h) {
+                attackedSquares.push((String.fromCharCode(file + 1) + (rank - 1)) as Chess.Square);
+            }
+        }
+
+        attackedSquares = attackedSquares.filter(square => {
+            const rank = parseInt(square[1], 10);
+            return rank >= 1 && rank <= 8;
+        });
+
+        return attackedSquares.filter(square => chess.get(square));
+    }
+
 }
 
 export default ChessUtils;

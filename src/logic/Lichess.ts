@@ -224,17 +224,7 @@ class Lichess {
                     const signedDiff = sign * (evaluation[0].wcp - positionEvaluation.wcp);
                     if (signedDiff < MIN_EVAL_DIFF_TO_CONSIDER) {
                         if (evaluation[0].bestSequence.length !== 0) {
-                            const moveIsCapture = (move: MoveData) => move.san.includes('x');
-                            // skip last move, if it is our move
-                            const bestSequence = evaluation[0].bestSequence.length % 2 === 0 ? evaluation[0].bestSequence.slice(0, -1) : evaluation[0].bestSequence;
-                            const stopAtCapture = 2 * bestSequence.filter((_, index) => index % 2 === 0).findIndex(move => moveIsCapture(move));
-                            const oppResponse = stopAtCapture > 0 ? bestSequence.slice(0, stopAtCapture + 1) : bestSequence;
-                            this.annotateMistakeMoves(move, signedDiff)
-                            popularBlunderSequences.push({
-                                moves: [move, ...oppResponse],
-                                wwr: evaluation[0].wwr,
-                                wcp: evaluation[0].wcp
-                            });
+                            Lichess.addPopularBlunderSequence(evaluation, play, move, popularBlunderSequences, signedDiff);
                             console.log(`Removed: ${[...play, move].map(move => move.san).join(' ')} occurs ${(Moves.moveOccurrences(move) / totalMoveOccurrences * 100).toFixed(1)}%`);
                         }
                     } else if (signedDiff >= 0) {
@@ -265,7 +255,7 @@ class Lichess {
             if (isOurBestMoveLessPopular && positionEvaluations[0].bestMove.uci === move.uci) {
                 const signedDiff: number = sign * (positionEvaluations[0].wcp - positionEvaluations[1].wcp);
                 const moveFrequency = Moves.moveOccurrences(move) / totalMoveOccurrences;
-                this.annotateGoodMoves(move, moveFrequency, signedDiff);
+                Lichess.annotateGoodMoves(move, moveFrequency, signedDiff);
             }
             const significance = Math.min(Math.abs(DUBIOUS_MOVE_DIFF), Math.abs(INTERESTING_MOVE_DIFF));
             const oppBestMoveAdvantage = moveEvaluation.length === BEFORE_OPP_MOVE_EVALUATION_MULTIPV
@@ -294,11 +284,11 @@ class Lichess {
 
                 if (opponentMove.uci === moveEvaluation[0].bestMove.uci) {
                     if (isOppBestMoveSignificantlyBetter) {
-                        this.annotateGoodMoves(opponentMove, moveFrequency, oppBestMoveAdvantage);
+                        Lichess.annotateGoodMoves(opponentMove, moveFrequency, oppBestMoveAdvantage);
                     }
                 } else if (result.wcp.engine) {
                     const signedDiff: number = -sign * (result.wcp.engine - moveEvaluation[0].wcp); // -sign because we're looking at the opponent's perspective
-                    this.annotateMistakeMoves(opponentMove, signedDiff);
+                    Lichess.annotateMistakeMoves(opponentMove, signedDiff);
                 }
 
                 if (result.variants.length === 0) {
@@ -345,6 +335,59 @@ class Lichess {
         this.cacheManager.cacheTransposition(fenKey, result);
 
         return result;
+    }
+
+    static addPopularBlunderSequence(evaluation: Evaluation[], play: MoveData[], candidateMove: MoveData, popularBlunderSequences: Variant[], signedDiff: number) {
+        const moveIsCapture = (move: MoveData) => move.san.includes('x');
+        const bestSequence = evaluation[0].bestSequence.length % 2 === 0 ? evaluation[0].bestSequence.slice(0, -1) : evaluation[0].bestSequence;
+        const chess = new Chess.Chess();
+
+        play.forEach(move => chess.move(move.san));
+        const initialMaterial = ChessUtils.getMaterialValueCP(chess);
+        chess.move(candidateMove.san);
+
+        const oppColor = chess.turn();
+        const ourColor = oppColor === 'w' ? 'b' : 'w';
+        let stopAtMove = bestSequence.length;
+
+        // Simplified calculation of pawn threads that doesn't take into account possible pins
+        let pawnThreatenedOpponentPiece = false;
+
+        for (let i = 0; i < bestSequence.length - 1; i += 2) {
+            stopAtMove = i + 1;
+            const oppMove = bestSequence[i];
+            const ourMove = bestSequence[i + 1];
+
+            if (moveIsCapture(oppMove) || pawnThreatenedOpponentPiece) {
+                chess.move(oppMove.san);
+                chess.move(ourMove.san);
+                const afterValue = ChessUtils.getMaterialValueCP(chess);
+
+                if ((oppColor === 'w' && afterValue > initialMaterial + Math.abs(signedDiff) / 2)
+                    || (oppColor === 'b' && afterValue < initialMaterial - Math.abs(signedDiff) / 2)) {
+
+                    if (!pawnThreatenedOpponentPiece && ChessUtils.pawnsThreatenOpponentPiece(chess, ourColor)) {
+                        pawnThreatenedOpponentPiece = true;
+                        continue;
+                    }
+                    break;
+                }
+
+            } else {
+                chess.move(oppMove.san);
+                chess.move(ourMove.san);
+            }
+        }
+
+        const oppResponse = bestSequence.slice(0, stopAtMove);
+
+        this.annotateMistakeMoves(candidateMove, signedDiff);
+
+        popularBlunderSequences.push({
+            moves: [candidateMove, ...oppResponse],
+            wwr: evaluation[0].wwr,
+            wcp: evaluation[0].wcp
+        });
     }
 
     async countLeafNodes(probability: number, ply: number, play: MoveData[], positions: FENKey[], startMoves: number, fen: string): Promise<number> {
@@ -499,7 +542,7 @@ class Lichess {
         return evaluations;
     }
 
-    annotateGoodMoves(move: MoveData, moveFrequency: number, advantage: number): void {
+    static annotateGoodMoves(move: MoveData, moveFrequency: number, advantage: number): void {
         if (moveFrequency < BRILLIANT_MOVE_THRESHOLD && advantage > BRILLIANT_MOVE_DIFF) {
             move.annotation = '!!';
         } else if (moveFrequency < GOOD_MOVE_THRESHOLD && advantage > GOOD_MOVE_DIFF) {
@@ -509,7 +552,7 @@ class Lichess {
         }
     }
 
-    annotateMistakeMoves(move: MoveData, signedDiff: number): void {
+    static annotateMistakeMoves(move: MoveData, signedDiff: number): void {
         if (signedDiff < BLUNDER_MOVE_DIFF) {
             move.annotation = '??';
         } else if (signedDiff < MISTAKE_MOVE_DIFF) {

@@ -1,8 +1,8 @@
 import {saveAs} from 'file-saver';
 import {useState} from 'react';
 import MoveFetcher from "../utils/MoveFetcher";
-import {MoveData, Variant} from "../logic/Lichess";
-import ChessUtils from "../utils/ChessUtils";
+import {Variant} from "../logic/Lichess";
+import PgnUtils from "../utils/PgnUtils";
 
 
 const MAX_VARIANTS_PER_FILE: number = 100;
@@ -13,28 +13,11 @@ function useSavePgn(variants: Variant[], openingName: string) {
     async function savePgn() {
         setIsSaving(true);
 
-        let pgnData = '';
         const moveFetcher = new MoveFetcher("");
 
         const openingNamePromises: Promise<string>[] = variants.map(variant =>
             moveFetcher.fetchOpeningName(variant.moves.map(moveData => moveData.uci))
         );
-
-        function writeMoves(variant: Variant, startIndex: number = 0): string {
-            let line = variant.moves.map((move, i) => {
-                let san = `${move.san}${move.annotation || ''}`;
-                const blunders = move.popularBlunderSequences;
-                if (blunders?.length) {
-                    san += ` ${blunders.map(subVariant => `(${writeMoves(subVariant, startIndex + i)})`).join('')}`;
-                }
-                return ((startIndex + i) % 2 === 0 ? `${((startIndex + i) / 2) + 1}.${san}` : san);
-            }).join(' ');
-            if (!ChessUtils.isCheckmateMove(variant.moves[variant.moves.length - 1].san)) {
-                line += ` ${ChessUtils.getGameResult(variant.wcp)}`;
-            }
-
-            return startIndex % 2 === 1 ? `${Math.floor((startIndex + variant.moves.length) / 2) + 1}...${line}` : line;
-        }
 
         Promise.all(openingNamePromises).then((openingNames) => {
             // Create a map to group variants by their opening name
@@ -62,7 +45,7 @@ function useSavePgn(variants: Variant[], openingName: string) {
                         const totalCount = groupedVariantList.length;
                         let variantName = name;
                         variantName += ` #${existingCount + 1}/${totalCount}`;
-                        const line = variant.moves.length > 0 ? writeMoves(variant) : '';
+                        const line = variant.moves.length > 0 ? PgnUtils.writeMoves(variant) : '';
                         const gameHeader =
                             `[Event "${variantName}"]\n` +
                             '[Site "https://lichess.org"]\n' +
