@@ -10,6 +10,7 @@ app.use(bodyParser.json());
 
 // const engine = spawn('/opt/homebrew/bin/stockfish');
 const numThreads = 4;
+const hashMB = 1024;
 
 const moveTime = process.argv[2] || 50;
 
@@ -27,6 +28,7 @@ app.get('/api/cloud-eval', function (req, res) {
 
     engine.stdin.write('setoption name Threads value ' + numThreads + '\n');
     engine.stdin.write(`setoption name MultiPV value ${multipv}\n`);
+    engine.stdin.write(`setoption name Hash value ${hashMB}\n`);
     engine.stdin.write(`position fen ${fen}\n`);
     engine.stdin.write(`go movetime ${time}\n`);
 
