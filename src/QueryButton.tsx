@@ -10,6 +10,12 @@ export const QueryButton: React.FC<QueryButtonProps> = ({ onClick, onOptionChang
     const [isOpen, setIsOpen] = useState(false);
     const [selectedOption, setSelectedOption] = useState<'white' | 'black' | 'default'>('default');
 
+    const CheckmarkIcon: React.FC<{ className?: string }> = ({ className }) => (
+        <svg className={`w-4 h-4 ${className}`} viewBox="0 0 24 24">
+            <path d="M6 12l4 4 8-8-1.5-1.5L10 14l-2.5-2.5L6 12z" fill="currentColor" />
+        </svg>
+    );
+
     const handleButtonClick = () => {
         onClick(selectedOption);
     };
@@ -38,14 +44,17 @@ export const QueryButton: React.FC<QueryButtonProps> = ({ onClick, onOptionChang
             </div>
             {isOpen && (
                 <div className="absolute right-0 mt-2 py-1 w-48 bg-white rounded-lg shadow-xl">
-                    <button onClick={() => handleOptionChange('default')} className="w-full text-left block px-4 py-2 text-sm capitalize text-gray-700 hover:bg-blue-500 hover:text-white">
-                        Default (Next to move)
+                    <button onClick={() => handleOptionChange('default')} className="flex justify-between w-full text-left px-4 py-2 text-sm capitalize text-gray-700 hover:bg-blue-500 hover:text-white">
+                        Next to move
+                        {selectedOption === 'default' && <CheckmarkIcon className="text-gray-700" />}
                     </button>
-                    <button onClick={() => handleOptionChange('white')} className="w-full text-left block px-4 py-2 text-sm capitalize text-gray-700 hover:bg-blue-500 hover:text-white">
+                    <button onClick={() => handleOptionChange('white')} className="flex justify-between w-full text-left px-4 py-2 text-sm capitalize text-gray-700 hover:bg-blue-500 hover:text-white">
                         For White
+                        {selectedOption === 'white' && <CheckmarkIcon className="text-gray-700" />}
                     </button>
-                    <button onClick={() => handleOptionChange('black')} className="w-full text-left block px-4 py-2 text-sm capitalize text-gray-700 hover:bg-blue-500 hover:text-white">
+                    <button onClick={() => handleOptionChange('black')} className="flex justify-between w-full text-left px-4 py-2 text-sm capitalize text-gray-700 hover:bg-blue-500 hover:text-white">
                         For Black
+                        {selectedOption === 'black' && <CheckmarkIcon className="text-gray-700" />}
                     </button>
                 </div>
             )}
