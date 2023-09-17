@@ -12,6 +12,7 @@ import ChessUtils, {
 } from "../utils/ChessUtils";
 import Shapes from "../utils/Shapes";
 import Moves from "../utils/Moves";
+import {Rating} from "../RatingSelect";
 
 
 interface MoveData {
@@ -92,7 +93,18 @@ class Lichess {
         this.cacheManager = new CacheManager();
     }
 
-    async search(probability: number, ply: number, play: MoveData[], positions: FENKey[], startMoves: number, fen: string, setShapes: (shapes: DrawShape[]) => void, incrementProgress: () => void): Promise<SearchResults> {
+    async search(
+        probability: number,
+        ply: number,
+        play: MoveData[],
+        positions: FENKey[],
+        startMoves: number,
+        fen: string,
+        setShapes: (shapes: DrawShape[]) => void,
+        incrementProgress: () => void,
+        ratings: Rating[],
+    ): Promise<SearchResults> {
+
         incrementProgress();
         const fenKey: FENKey = fen.split(' ').slice(0, 4).join(' '); // key components of FEN
         const cached = this.cacheManager.getTransposition(fenKey);
@@ -132,7 +144,7 @@ class Lichess {
 
             setShapes(Shapes.createShapes(play, positionEvaluation, startMoves, sign));
 
-            const nextPv = await this.chessDataUtils.fetchSingleResponseMovesPv(positionEvaluation, CLEAR_BEST_MOVE_PROB, play);
+            const nextPv = await this.chessDataUtils.fetchSingleResponseMovesPv(positionEvaluation, CLEAR_BEST_MOVE_PROB, play, ratings);
 
             return {
                 wcp: {
@@ -174,7 +186,7 @@ class Lichess {
             if (isValuableCapture) {
                 console.log(`Significant advantage (${positionEvaluation.wcp} cp) after ${[...play, positionEvaluation.bestMove].map(move => move.san).join(' ')}`);
 
-                const nextPv = await this.chessDataUtils.fetchSingleResponseMovesPv(positionEvaluation, CLEAR_BEST_MOVE_PROB, play);
+                const nextPv = await this.chessDataUtils.fetchSingleResponseMovesPv(positionEvaluation, CLEAR_BEST_MOVE_PROB, play, ratings);
                 return {
                     wcp: {
                         engine: positionEvaluation.wcp,
@@ -190,7 +202,7 @@ class Lichess {
             }
         }
 
-        const sortedMoves = await this.chessDataUtils.fetchMoves(play, 'us').then(Moves.sortByWinRate.bind(this, sideToMove));
+        const sortedMoves = await this.chessDataUtils.fetchMoves(play, 'us', ratings).then(Moves.sortByWinRate.bind(this, sideToMove));
         const totalMoveOccurrences = Moves.totalOccurrences(sortedMoves);
         let moves: MoveData[] = [];
         const moveEvaluations: { [key: string]: Evaluation[] | undefined } = {};
@@ -267,7 +279,7 @@ class Lichess {
 
         for (const move of moves) {
             const nextPlay = [...play, move];
-            const allOpponentMoves = await this.chessDataUtils.fetchMoves(nextPlay, 'they').then(Moves.sortByWinRate.bind(this, sideToMove));
+            const allOpponentMoves = await this.chessDataUtils.fetchMoves(nextPlay, 'they', ratings).then(Moves.sortByWinRate.bind(this, sideToMove));
             // Filter out moves that are too rare
             const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
             const opponentMoves = allOpponentMoves.filter(move => Moves.moveOccurrences(move) >= totalOppMoveOccurrences * SKIP_OPP_MOVES_WITH_PROB);
@@ -302,7 +314,7 @@ class Lichess {
                 if (totalOppMoveOccurrences === 1) {
                     nextProbability = 0;
                 }
-                const result: SearchResults = await this.search(nextProbability, ply + 2, nextNextPlay, [...positions, fenKey], startMoves, nextNextFen, setShapes, incrementProgress);
+                const result: SearchResults = await this.search(nextProbability, ply + 2, nextNextPlay, [...positions, fenKey], startMoves, nextNextFen, setShapes, incrementProgress, ratings);
                 const wcp: number = result.wcp.statistics;
                 const wwr: number = result.wwr;
                 scores.push({wcp: wcp * moveFrequency, wwr: wwr * moveFrequency});
@@ -414,7 +426,7 @@ class Lichess {
         });
     }
 
-    async countLeafNodes(probability: number, ply: number, play: MoveData[], positions: FENKey[], startMoves: number, fen: string): Promise<number> {
+    async countLeafNodes(probability: number, ply: number, play: MoveData[], positions: FENKey[], startMoves: number, fen: string, ratings: Rating[]): Promise<number> {
         const fenKey: FENKey = fen.split(' ').slice(0, 4).join(' '); // key components of FEN
 
         // Exit condition: repetition
@@ -427,7 +439,7 @@ class Lichess {
         }
 
         const sideToMove = ply % 2 === 0 ? 'white' : 'black';
-        const sortedMoves = await this.chessDataUtils.fetchMoves(play, 'us').then(Moves.sortByWinRate.bind(this, sideToMove));
+        const sortedMoves = await this.chessDataUtils.fetchMoves(play, 'us', ratings).then(Moves.sortByWinRate.bind(this, sideToMove));
         const totalMoveOccurrences = Moves.totalOccurrences(sortedMoves);
 
         let moveCount = 0;
@@ -457,7 +469,7 @@ class Lichess {
         for (let i = 0; i < moveCount; i++) {
             const move = sortedMoves[i];
             const nextPlay = [...play, move];
-            const allOpponentMoves = await this.chessDataUtils.fetchMoves(nextPlay, 'they').then(Moves.sortByWinRate.bind(this, sideToMove));
+            const allOpponentMoves = await this.chessDataUtils.fetchMoves(nextPlay, 'they', ratings).then(Moves.sortByWinRate.bind(this, sideToMove));
             const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
             const opponentMoves = allOpponentMoves.filter(move => Moves.moveOccurrences(move) >= totalOppMoveOccurrences * SKIP_OPP_MOVES_WITH_PROB);
             for (const opponentMove of opponentMoves) {
@@ -465,7 +477,7 @@ class Lichess {
                 const adjustedProbability = probability * opponentMoveFrequency;
                 const nextNextPlay = [...nextPlay, opponentMove];
                 const nextNextFen = ChessUtils.playToFEN(nextNextPlay);
-                leafCount += await this.countLeafNodes(adjustedProbability, ply + 2, nextNextPlay, [...positions, fenKey], startMoves, nextNextFen);
+                leafCount += await this.countLeafNodes(adjustedProbability, ply + 2, nextNextPlay, [...positions, fenKey], startMoves, nextNextFen, ratings);
             }
         }
 

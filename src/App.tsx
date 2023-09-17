@@ -20,6 +20,7 @@ import Moves from "./utils/Moves";
 import {QueryButton} from "./QueryButton";
 import AlertDialog from "./AlertDialog";
 import ProgressBar from "./ProgressBar";
+import RatingSelect, {ALL_RATINGS, Rating} from "./RatingSelect";
 
 
 const LICHESS_HOST: string = 'https://lichess.org';
@@ -46,6 +47,7 @@ interface AppState {
     calculationStartTime: number;
     searchForColor: 'white' | 'black' | 'default';
     isDialogOpen: boolean;
+    selectedRating: Rating[];
 }
 
 interface MoveFrequency {
@@ -92,6 +94,7 @@ class App extends React.Component<any, AppState> {
             calculationStartTime: 0,
             searchForColor: 'default',
             isDialogOpen: false,
+            selectedRating: ALL_RATINGS,
         };
 
         this.throttledEstimateTime = throttle(this.estimateTimeRemaining, 5000);
@@ -258,7 +261,7 @@ class App extends React.Component<any, AppState> {
 
             if (searchForColor !== 'default' && searchForColor !== (currentMoves.length % 2 === 0 ? 'white' : 'black')) {
                 // Fetch possible opponent moves
-                const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they');
+                const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they', this.state.selectedRating);
                 const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
 
                 // Calculate the frequency of each opponent move
@@ -287,10 +290,28 @@ class App extends React.Component<any, AppState> {
                 const openingName = await this.moveFetcher.fetchOpeningName(scenario.moves.map(moveData => moveData.uci));
                 this.setState({openingName: openingName});
 
-                const estimatedLeaves = await lichess.countLeafNodes(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves));
+                const estimatedLeaves = await lichess.countLeafNodes(
+                    scenario.probability,
+                    scenario.moves.length,
+                    scenario.moves,
+                    [],
+                    scenario.moves.length,
+                    ChessUtils.playToFEN(scenario.moves),
+                    this.state.selectedRating,
+                );
                 this.setState({estimatedLeaves, progress: 0}); // Set the estimation to state and reset progress
 
-                const results = await lichess.search(scenario.probability, scenario.moves.length, scenario.moves, [], scenario.moves.length, ChessUtils.playToFEN(scenario.moves), this.drawMoves, this.incrementProgress);
+                const results = await lichess.search(
+                    scenario.probability,
+                    scenario.moves.length,
+                    scenario.moves,
+                    [],
+                    scenario.moves.length,
+                    ChessUtils.playToFEN(scenario.moves),
+                    this.drawMoves,
+                    this.incrementProgress,
+                    this.state.selectedRating,
+                );
 
                 console.log('Search complete');
                 console.log('Expected white cp:', parseFloat(results.wcp.statistics.toFixed(1)));
@@ -366,11 +387,19 @@ class App extends React.Component<any, AppState> {
                         {/* Adjusting board width based on screen sizes */}
                         <div className="relative w-8/12 sm:w-7/12 md:w-7/12 lg:w-6/12">
                             <div className="board-container" style={{width: '90%', margin: '0 auto'}}>
-                                <Board
-                                    config={{drawable: this.state.drawable}}
-                                    onMovesUpdate={this.updateCurrentMoves}
-                                    externalMoves={this.state.currentMoves}
-                                />
+                                <div className="flex flex-col items-stretch">
+                                    <RatingSelect
+                                        selectedRating={this.state.selectedRating}
+                                        onRatingChange={(rating) => {
+                                            this.setState({selectedRating: rating});
+                                        }}
+                                    />
+                                    <Board
+                                        config={{drawable: this.state.drawable}}
+                                        onMovesUpdate={this.updateCurrentMoves}
+                                        externalMoves={this.state.currentMoves}
+                                    />
+                                </div>
                                 <div className="flex justify-start space-x-4 p-4 pl-0">
                                     <QueryButton
                                         onClick={this.checkAuthAndQueryTree}
@@ -383,7 +412,7 @@ class App extends React.Component<any, AppState> {
                         {/* Adjusting variants section to occupy the remaining part */}
                         <div
                             className="w-4/12 sm:w-5/12 md:w-5/12 lg:w-6/12 ml-4"
-                            style={{ maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
+                            style={{maxHeight: 'calc(100vh - 100px)', overflowY: 'auto'}}>
                             {this.state.variants.map((variant, index) => (
                                 <VariantTile
                                     key={index}
