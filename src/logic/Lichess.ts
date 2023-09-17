@@ -75,6 +75,7 @@ const BRILLIANT_MOVE_DIFF: number = Number(process.env.REACT_APP_BRILLIANT_MOVE_
 const INTERESTING_MOVE_THRESHOLD: number = Number(process.env.REACT_APP_INTERESTING_MOVE_THRESHOLD) || 0.40;
 const GOOD_MOVE_THRESHOLD: number = Number(process.env.REACT_APP_GOOD_MOVE_THRESHOLD) || 0.25;
 const BRILLIANT_MOVE_THRESHOLD: number = Number(process.env.REACT_APP_BRILLIANT_MOVE_THRESHOLD) || 0.15;
+const SIGNIFICANT_ADVANTAGE_DIFF: number = Number(process.env.REACT_APP_SIGNIFICANT_ADVANTAGE_DIFF) || 500;
 const BEFORE_OUR_MOVE_EVALUATION_MULTIPV: number = Number(process.env.REACT_APP_BEFORE_OUR_MOVE_EVALUATION_MULTIPV) || 2;
 const BEFORE_OPP_MOVE_EVALUATION_MULTIPV: number = Number(process.env.REACT_APP_BEFORE_OPP_MOVE_EVALUATION_MULTIPV) || 2;
 const END_NODE_EVALUATION_MULTIPV: number = Number(process.env.REACT_APP_END_NODE_EVALUATION_MULTIPV) || 1;
@@ -150,6 +151,7 @@ class Lichess {
         const positionEvaluations = await this.evaluate(probability, play, BEFORE_OUR_MOVE_EVALUATION_MULTIPV, fen);
         const positionEvaluation: Evaluation | undefined = positionEvaluations?.[0];
 
+        // Exit condition: mate
         if (positionEvaluation?.wcp === INF_CP || positionEvaluation?.wcp === -INF_CP) {
             return {
                 wcp: {
@@ -162,6 +164,29 @@ class Lichess {
                     wwr: positionEvaluation.wwr,
                     wcp: positionEvaluation.wcp,
                 }],
+            }
+        }
+
+        // Exit condition: significant advantage after capturing a piece
+        const hasSignificantAdvantage = positionEvaluation && (sign * positionEvaluation.wcp) > SIGNIFICANT_ADVANTAGE_DIFF;
+        if (hasSignificantAdvantage) {
+            const isValuableCapture = ['n', 'b', 'r', 'q'].includes(ChessUtils.getCapturedPieceType(play, positionEvaluation.bestMove) || '');
+            if (isValuableCapture) {
+                console.log(`Significant advantage (${positionEvaluation.wcp} cp) after ${[...play, positionEvaluation.bestMove].map(move => move.san).join(' ')}`);
+
+                const nextPv = await this.chessDataUtils.fetchSingleResponseMovesPv(positionEvaluation, CLEAR_BEST_MOVE_PROB, play);
+                return {
+                    wcp: {
+                        engine: positionEvaluation.wcp,
+                        statistics: positionEvaluation.wcp,
+                    },
+                    wwr: positionEvaluation.wwr,
+                    variants: [{
+                        moves: nextPv,
+                        wwr: positionEvaluation.wwr,
+                        wcp: positionEvaluation.wcp,
+                    }],
+                }
             }
         }
 
@@ -338,7 +363,6 @@ class Lichess {
     }
 
     static addPopularBlunderSequence(evaluation: Evaluation[], play: MoveData[], candidateMove: MoveData, popularBlunderSequences: Variant[], signedDiff: number) {
-        const moveIsCapture = (move: MoveData) => move.san.includes('x');
         const bestSequence = evaluation[0].bestSequence.length % 2 === 0 ? evaluation[0].bestSequence.slice(0, -1) : evaluation[0].bestSequence;
         const chess = new Chess.Chess();
 
@@ -358,7 +382,7 @@ class Lichess {
             const oppMove = bestSequence[i];
             const ourMove = bestSequence[i + 1];
 
-            if (moveIsCapture(oppMove) || pawnThreatenedOpponentPiece) {
+            if (ChessUtils.isCaptureMove(oppMove) || pawnThreatenedOpponentPiece) {
                 chess.move(oppMove.san);
                 chess.move(ourMove.san);
                 const afterValue = ChessUtils.getMaterialValueCP(chess);

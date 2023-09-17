@@ -12,7 +12,7 @@ class PgnUtils {
             }
             return ((startIndex + i) % 2 === 0 ? `${((startIndex + i) / 2) + 1}.${san}` : san);
         }).join(' ');
-        if (!ChessUtils.isCheckmateMove(variant.moves[variant.moves.length - 1].san)) {
+        if (!ChessUtils.isCheckmateMove(variant.moves[variant.moves.length - 1])) {
             line += ` ${ChessUtils.getGameResult(variant.wcp)}`;
         }
 

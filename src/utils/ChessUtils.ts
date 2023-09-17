@@ -14,17 +14,31 @@ type ChessPiece = 'p' | 'P' | 'n' | 'N' | 'b' | 'B' | 'r' | 'R' | 'q' | 'Q' | 'k
 
 class ChessUtils {
 
-    static playToFEN(play: MoveData[]): string {
+    static playToChessInstance(play: MoveData[]): Chess.Chess {
         const chess = new Chess.Chess();
-
         for (const move of play) {
-            // chess.js requires moves to be in standard algebraic notation (SAN), not UCI
-            // If the moves are in UCI format, you'll need to convert them to SAN first
             if (!chess.move(move.san)) {
-                throw new Error(`Invalid move: ${move}`);
+                throw new Error(`Invalid move: ${move.san}`);
             }
         }
+        return chess;
+    }
+
+    static playToFEN(play: MoveData[]): string {
+        const chess = ChessUtils.playToChessInstance(play);
         return chess.fen();
+    }
+
+    static getCapturedPieceType(play: MoveData[], move: MoveData): Chess.PieceSymbol | null {
+        if (ChessUtils.isCaptureMove(move)) {
+            const captureSquare = move.uci.slice(2, 4);
+            const chess = ChessUtils.playToChessInstance(play);
+            const piece = chess.get(captureSquare as Chess.Square);
+            if (piece) {
+                return piece.type;
+            }
+        }
+        return null;
     }
 
     static playToMoves(play: MoveData[]): Array<{ move: MoveData, piece: { role: cg.Role, color: cg.Color } }> {
@@ -137,8 +151,12 @@ class ChessUtils {
         }
     };
 
-    static isCheckmateMove(san: string): boolean {
-        return san.endsWith('#');
+    static isCheckmateMove(move: MoveData): boolean {
+        return move.san.endsWith('#');
+    }
+
+    static isCaptureMove(move: MoveData): boolean {
+        return move.san.includes('x');
     }
 
     private static isChessPiece(piece: string): piece is ChessPiece {
