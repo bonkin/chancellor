@@ -21,6 +21,7 @@ import {QueryButton} from "./QueryButton";
 import AlertDialog from "./AlertDialog";
 import ProgressBar from "./ProgressBar";
 import RatingSelect, {ALL_RATINGS, Rating} from "./RatingSelect";
+import SpeedSelect, {ALL_SPEEDS, ExplorerSpeed} from "./SpeedSelect";
 
 
 const LICHESS_HOST: string = 'https://lichess.org';
@@ -48,6 +49,7 @@ interface AppState {
     searchForColor: 'white' | 'black' | 'default';
     isDialogOpen: boolean;
     selectedRating: Rating[];
+    selectedSpeeds: ExplorerSpeed[];
 }
 
 interface MoveFrequency {
@@ -95,6 +97,7 @@ class App extends React.Component<any, AppState> {
             searchForColor: 'default',
             isDialogOpen: false,
             selectedRating: ALL_RATINGS,
+            selectedSpeeds: ALL_SPEEDS,
         };
 
         this.throttledEstimateTime = throttle(this.estimateTimeRemaining, 5000);
@@ -261,7 +264,7 @@ class App extends React.Component<any, AppState> {
 
             if (searchForColor !== 'default' && searchForColor !== (currentMoves.length % 2 === 0 ? 'white' : 'black')) {
                 // Fetch possible opponent moves
-                const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they', this.state.selectedRating);
+                const allOpponentMoves = await lichess.chessDataUtils.fetchMoves(currentMoves, 'they', this.state.selectedRating, this.state.selectedSpeeds);
                 const totalOppMoveOccurrences = Moves.totalOccurrences(allOpponentMoves);
 
                 // Calculate the frequency of each opponent move
@@ -298,6 +301,7 @@ class App extends React.Component<any, AppState> {
                     scenario.moves.length,
                     ChessUtils.playToFEN(scenario.moves),
                     this.state.selectedRating,
+                    this.state.selectedSpeeds,
                 );
                 this.setState({estimatedLeaves, progress: 0}); // Set the estimation to state and reset progress
 
@@ -311,6 +315,7 @@ class App extends React.Component<any, AppState> {
                     this.drawMoves,
                     this.incrementProgress,
                     this.state.selectedRating,
+                    this.state.selectedSpeeds,
                 );
 
                 console.log('Search complete');
@@ -398,6 +403,12 @@ class App extends React.Component<any, AppState> {
                                         config={{drawable: this.state.drawable}}
                                         onMovesUpdate={this.updateCurrentMoves}
                                         externalMoves={this.state.currentMoves}
+                                    />
+                                    <SpeedSelect
+                                        selectedSpeeds={this.state.selectedSpeeds}
+                                        onSpeedChange={(speed) => {
+                                            this.setState({selectedSpeeds: speed});
+                                        }}
                                     />
                                 </div>
                                 <div className="flex justify-start space-x-4 p-4 pl-0">

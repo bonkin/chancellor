@@ -28,6 +28,7 @@ code {
     background-size: 200% 100%;
 }
 
+/* Common styles for tooltips */
 .tooltip {
     position: relative;
     cursor: pointer;
@@ -43,7 +44,6 @@ code {
     padding: 5px;
     position: absolute;
     z-index: 1;
-    bottom: 125%;
     left: 50%;
     transform: translateX(-50%);
     opacity: 0;
@@ -53,6 +53,16 @@ code {
 .tooltip:hover .tooltiptext {
     visibility: visible;
     opacity: 1;
+}
+
+/* Tooltip positioning for RatingSelect */
+.ratingSelect .tooltip .tooltiptext {
+    bottom: 125%; /* position above for RatingSelect */
+}
+
+/* Tooltip positioning for SpeedSelect */
+.speedSelect .tooltip .tooltiptext {
+    top: 125%; /* position below for SpeedSelect */
 }
 
 @tailwind base;

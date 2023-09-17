@@ -3,6 +3,7 @@ import NetworkRequestUtils from "./NetworkRequestUtils";
 import Moves from "./Moves";
 import {STARTING_POSITION} from "../App";
 import {Rating} from "../RatingSelect";
+import {ExplorerSpeed} from "../SpeedSelect";
 
 
 const DATABASE_EXPLORER = process.env.REACT_APP_DATABASE_EXPLORER || 'http://127.0.0.1:9002/lichess';
@@ -15,10 +16,10 @@ class MoveFetcher {
         this.lichessAccessToken = lichessAccessToken;
     }
 
-    async fetchMoves(play: MoveData[], sideToMove: 'us' | 'they', ratings: Rating[]): Promise<MoveData[]> {
+    async fetchMoves(play: MoveData[], sideToMove: 'us' | 'they', ratings: Rating[], speeds: ExplorerSpeed[]): Promise<MoveData[]> {
         const ratingsString = ratings.join(',');
-        const speeds = sideToMove === 'us' ? 'bullet,blitz,rapid,classical,correspondence' : 'ultraBullet,bullet,blitz,rapid,classical';
-        const url = `${DATABASE_EXPLORER}?variant=standard&topGames=0&recentGames=0&speeds=${speeds}&ratings=${ratingsString}&play=${play.map(move => move.uci).join(',')}`;
+        const speedsString = speeds.join(',');
+        const url = `${DATABASE_EXPLORER}?variant=standard&topGames=0&recentGames=0&speeds=${speedsString}&ratings=${ratingsString}&play=${play.map(move => move.uci).join(',')}`;
         const response = await NetworkRequestUtils.fetchWithRetry(url, this.lichessAccessToken, false, {method: 'GET'});
 
         const data = await response.json();
@@ -36,13 +37,13 @@ class MoveFetcher {
         return data["opening"]["name"];
     }
 
-    async fetchSingleResponseMovesPv(positionEvaluation: Evaluation, clearBestMoveProb: number, play: MoveData[], ratings: Rating[]): Promise<MoveData[]> {
+    async fetchSingleResponseMovesPv(positionEvaluation: Evaluation, clearBestMoveProb: number, play: MoveData[], ratings: Rating[], speeds: ExplorerSpeed[]): Promise<MoveData[]> {
         let nextPv: MoveData[] = [];
         let pvIndex = 0;
         let continueAdding = pvIndex < positionEvaluation.bestSequence.length;
         while (continueAdding) {
             nextPv.push(positionEvaluation.bestSequence[pvIndex]);
-            continueAdding = pvIndex + 2 < positionEvaluation.bestSequence.length && await this.fetchMoves([...play, ...nextPv], 'they', ratings).then(moves => {
+            continueAdding = pvIndex + 2 < positionEvaluation.bestSequence.length && await this.fetchMoves([...play, ...nextPv], 'they', ratings, speeds).then(moves => {
                 if (moves.length === 0) {
                     return false;
                 }

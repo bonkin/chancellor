@@ -8,6 +8,20 @@ interface RatingSelectProps {
     onRatingChange: (ratings: Rating[]) => void;
 }
 
+/**
+ * The `RatingSelect` component provides an interface for users to filter games
+ * based on the average rating of the players involved in those games.
+ *
+ * Lichess classifies a game into a certain rating band for its opening explorer
+ * based on the average rating of both players.
+ *
+ * <strong>Classification Criteria:</strong>
+ * - Games in a specific rating band might not necessarily have both players within that band.
+ * - For example, in the 2000-2200 rating band, one player might be rated 2100 while the other is rated 1900.
+ * - As long as the average rating falls within the desired band, the game is included in that category.
+ *
+ * This component allows users to select one or multiple rating bands to filter their game data search.
+ */
 const RatingSelect: React.FC<RatingSelectProps> = ({selectedRating, onRatingChange}) => {
 
     const [dragStart, setDragStart] = useState<Rating | null>(null);
@@ -71,7 +85,7 @@ const RatingSelect: React.FC<RatingSelectProps> = ({selectedRating, onRatingChan
     }
 
     return (
-        <div className="flex">
+        <div className="flex ratingSelect">
             {ALL_RATINGS.map((rating, index) => (
                 <button
                     key={rating}
