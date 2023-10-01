@@ -1,6 +1,6 @@
 import * as cg from "chessground/types";
 import * as Chess from "chess.js";
-import {MoveData, SAN} from "../logic/Lichess";
+import {FENKey, MoveData, SAN} from "../logic/Lichess";
 import {Square, SQUARES} from "chess.js";
 
 
@@ -14,31 +14,75 @@ type ChessPiece = 'p' | 'P' | 'n' | 'N' | 'b' | 'B' | 'r' | 'R' | 'q' | 'Q' | 'k
 
 class ChessUtils {
 
-    static playToChessInstance(play: MoveData[]): Chess.Chess {
+    private static playToChessInstance(play: MoveData[]): Chess.Chess | null {
         const chess = new Chess.Chess();
         for (const move of play) {
-            if (!chess.move(move.san)) {
-                throw new Error(`Invalid move: ${move.san}`);
+            const isLegal = chess.moves().some(san => san === move.san);
+            if (!isLegal) {
+                return null;
             }
+            chess.move(move.san);
         }
         return chess;
     }
 
+    static isLegal(play: MoveData[]): boolean {
+        return ChessUtils.playToChessInstance(play) !== null;
+    }
+
     static playToFEN(play: MoveData[]): string {
         const chess = ChessUtils.playToChessInstance(play);
+        if (!chess) {
+            throw new Error("Invalid play sequence, cannot convert to FEN.");
+        }
         return chess.fen();
+    }
+
+    static isTransposition(a: MoveData[], b: MoveData[]): boolean {
+        const aFENKey: FENKey = ChessUtils.playToFEN(a).split(' ').slice(0, 4).join(' ');
+        const bFENKey: FENKey = ChessUtils.playToFEN(b).split(' ').slice(0, 4).join(' ');
+        return aFENKey === bFENKey;
     }
 
     static getCapturedPieceType(play: MoveData[], move: MoveData): Chess.PieceSymbol | null {
         if (ChessUtils.isCaptureMove(move)) {
             const captureSquare = move.uci.slice(2, 4);
             const chess = ChessUtils.playToChessInstance(play);
+            if (!chess) {
+                throw new Error("Invalid play sequence, cannot get captured piece type.");
+            }
             const piece = chess.get(captureSquare as Chess.Square);
             if (piece) {
                 return piece.type;
             }
         }
         return null;
+    }
+
+    static forEachLegalMove(
+        play: MoveData[],
+        callback: ({san, uci, fenKey}: {san: string, uci: string, fenKey: FENKey}) => any | undefined
+    ): any | undefined {
+        const chess = ChessUtils.playToChessInstance(play);
+        if (!chess) {
+            throw new Error("Invalid play sequence, cannot iterate over legal moves.");
+        }
+        for (const chessMove of chess.moves({verbose: true})) {
+            chess.move(chessMove);
+            const fenKey: FENKey = chess.fen().split(' ').slice(0, 4).join(' ');
+
+            let uci = chessMove.from + chessMove.to;
+            if (chessMove.flags.includes("p")) { // "p" flag denotes a promotion
+                uci += chessMove.promotion;
+            }
+
+            const result = callback({san: chessMove.san, uci: uci, fenKey: fenKey});
+            chess.undo();
+            if (result !== undefined) {
+                return result;
+            }
+        }
+        return undefined;
     }
 
     static playToMoves(play: MoveData[]): Array<{ move: MoveData, piece: { role: cg.Role, color: cg.Color } }> {
@@ -237,6 +281,13 @@ class ChessUtils {
         });
 
         return attackedSquares.filter(square => chess.get(square));
+    }
+
+    /**
+     * Returns the winRate ratio in the range [0.0, 1.0] from the perspective of the side to move.
+     */
+    static normalizeWinRate(score: number, sideToMove: "white" | "black"): number {
+        return (sideToMove === "white" ? score : WHITE_WIN_RATE - score) / WHITE_WIN_RATE;
     }
 
 }

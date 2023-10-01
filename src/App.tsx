@@ -22,6 +22,7 @@ import AlertDialog from "./AlertDialog";
 import ProgressBar from "./ProgressBar";
 import RatingSelect, {ALL_RATINGS, Rating} from "./RatingSelect";
 import SpeedSelect, {ALL_SPEEDS, ExplorerSpeed} from "./SpeedSelect";
+import {IncludePositionButton} from "./IncludePositionButton";
 
 
 const LICHESS_HOST: string = 'https://lichess.org';
@@ -40,6 +41,7 @@ interface AppState {
     fen: string;
     drawable: { shapes: any[] };
     currentMoves: MoveData[];
+    includedPositions: Variant[];
     variants: Variant[];
     openingName: string;
     progress: number;
@@ -48,6 +50,8 @@ interface AppState {
     calculationStartTime: number;
     searchForColor: 'white' | 'black' | 'default';
     isDialogOpen: boolean;
+    dialogTitle: string;
+    dialogMessage: string;
     selectedRating: Rating[];
     selectedSpeeds: ExplorerSpeed[];
 }
@@ -88,6 +92,7 @@ class App extends React.Component<any, AppState> {
             fen: 'start',
             drawable: {shapes: []},
             currentMoves: [],
+            includedPositions: [],
             variants: [],
             openingName: STARTING_POSITION,
             progress: 0,
@@ -96,6 +101,9 @@ class App extends React.Component<any, AppState> {
             calculationStartTime: 0,
             searchForColor: 'default',
             isDialogOpen: false,
+            dialogTitle: "Access Token is missing",
+            dialogMessage: "It is recommended to log in to your Lichess account to use this app for an optimized experience." +
+                "\nPlease be aware that both logged-in and guest users are subject to API rate limitations from Lichess.",
             selectedRating: ALL_RATINGS,
             selectedSpeeds: ALL_SPEEDS,
         };
@@ -290,6 +298,12 @@ class App extends React.Component<any, AppState> {
             let allVariants: Variant[] = [];
 
             for (const scenario of scenarios) {
+
+                if (this.state.includedPositions.some(included => ChessUtils.isTransposition(included.moves, scenario.moves))) {
+                    console.log(`Skipping scenario ${scenario.moves.map(moveData => moveData.san).join(' ')}`);
+                    continue;
+                }
+
                 const openingName = await this.moveFetcher.fetchOpeningName(scenario.moves.map(moveData => moveData.uci));
                 this.setState({openingName: openingName});
 
@@ -316,6 +330,7 @@ class App extends React.Component<any, AppState> {
                     this.incrementProgress,
                     this.state.selectedRating,
                     this.state.selectedSpeeds,
+                    this.state.includedPositions,
                 );
 
                 console.log('Search complete');
@@ -345,6 +360,48 @@ class App extends React.Component<any, AppState> {
             console.error("An error occurred:", error);
             this.setState({isDialogOpen: true});
         }
+    }
+
+    includeKnownPosition = () => {
+
+        this.setState(prevState => {
+            const currentMoves = [...prevState.currentMoves];
+            const fen = ChessUtils.playToFEN(currentMoves);
+            const includedPositions = [...prevState.includedPositions];
+
+            if (!includedPositions.map(variant => ChessUtils.playToFEN(variant.moves)).includes(fen)) {
+                const newVariant: Variant = {moves: currentMoves, wwr: 0, wcp: 0};
+                return {
+                    variants: [...prevState.variants, newVariant],
+                    includedPositions: [...prevState.includedPositions, newVariant],
+                    currentMoves: [],
+                };
+            }
+            // No state update if condition isn't met
+            return null;
+        });
+    };
+
+    undoLastIncludedKnownPosition = () => {
+
+        this.setState(prevState => {
+            const includedPositions = [...prevState.includedPositions];
+            const variants = [...prevState.variants];
+
+            if (includedPositions.length > 0) {
+                const lastIncludedPosition = includedPositions.pop();
+                if (lastIncludedPosition && ChessUtils.isTransposition(lastIncludedPosition.moves, variants[variants.length - 1].moves)) {
+                    variants.pop();
+                    return {
+                        variants: variants,
+                        includedPositions: includedPositions,
+                        currentMoves: [],
+                    };
+                }
+            }
+            // No state update if condition isn't met
+            return null;
+        })
     }
 
     async closeDialog() {
@@ -416,7 +473,14 @@ class App extends React.Component<any, AppState> {
                                         onClick={this.checkAuthAndQueryTree}
                                         onOptionChange={this.handleOptionChange}
                                     />
-                                    <SavePgnButton variants={this.state.variants} openingName={this.state.openingName}/>
+                                    <IncludePositionButton
+                                        onClick={this.includeKnownPosition}
+                                        onUndo={this.undoLastIncludedKnownPosition}
+                                    />
+                                    <SavePgnButton
+                                        variants={this.state.variants}
+                                        openingName={this.state.openingName}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -430,6 +494,7 @@ class App extends React.Component<any, AppState> {
                                     variant={variant}
                                     index={index}
                                     totalVariants={this.state.variants.length}
+                                    isIncludedPosition={this.state.includedPositions.some(included => ChessUtils.isTransposition(included.moves, variant.moves))}
                                     onMoveClick={this.handleMoveClick}
                                 />
                             ))}
@@ -439,6 +504,8 @@ class App extends React.Component<any, AppState> {
                 <AlertDialog
                     isDialogOpen={this.state.isDialogOpen}
                     onClose={this.closeDialog}
+                    title={this.state.dialogTitle}
+                    message={this.state.dialogMessage}
                 />
             </div>
         );

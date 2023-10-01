@@ -10,7 +10,7 @@ app.use(bodyParser.json());
 
 // const engine = spawn('/opt/homebrew/bin/stockfish');
 const numThreads = 4;
-const hashMB = 1024;
+const hashMB = 16384;
 
 const moveTime = process.argv[2] || 50;
 

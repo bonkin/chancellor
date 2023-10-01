@@ -1,5 +1,5 @@
 import ChessUtils from "./ChessUtils";
-import {MoveData} from "../logic/Lichess";
+import {MoveData, Variant} from "../logic/Lichess";
 
 class Moves {
 
@@ -18,13 +18,48 @@ class Moves {
         return (term1 - term2) / denominator;
     }
 
-    static sortByWinRate(sideToMove: any, moves: MoveData[]): MoveData[] {
+    static sortByWinRate(sideToMove: "white" | "black", moves: MoveData[]): MoveData[] {
         moves.sort((a: MoveData, b: MoveData) => {
             const scoreA = Moves.wilsonScore(a, sideToMove);
             const scoreB = Moves.wilsonScore(b, sideToMove);
             return scoreB - scoreA;
         });
         return moves;
+    }
+
+    static sortByIncludedMovesAndWinRate(candidateMoves: MoveData[], sideToMove: "white" | "black", play: MoveData[], included: Variant[]): MoveData[] {
+        const includedMoves: MoveData[][] = included
+            .map(variant => variant.moves.slice(0, play.length + 1))
+            .filter(moves => moves.length > play.length);
+
+        const includedMovesCanTranspose: MoveData[][] = included
+            .map(variant => variant.moves.slice(0, play.length + 3))
+            .filter(moves => moves.length > play.length + 2)
+            .map(moves => [...moves.slice(0, play.length), moves[play.length + 2]])
+            .filter(moves => ChessUtils.isLegal(moves));
+
+        const isIncludedCache: Map<MoveData, boolean> = new Map();
+        const canBeNextMoveAndIncludedCache: Map<MoveData, boolean> = new Map();
+
+        candidateMoves.forEach(move => {
+            isIncludedCache.set(move, includedMoves.some(variant => ChessUtils.isTransposition(variant, [...play, move])));
+            canBeNextMoveAndIncludedCache.set(move, includedMovesCanTranspose.some(variant => ChessUtils.isTransposition(variant, [...play, move])));
+        });
+
+        return [...candidateMoves].sort((a, b) => {
+            const aIsIncluded = isIncludedCache.get(a) || false;
+            const bIsIncluded = isIncludedCache.get(b) || false;
+            const aCanBeNextMoveAndIncluded = canBeNextMoveAndIncludedCache.get(a) || false;
+            const bCanBeNextMoveAndIncluded = canBeNextMoveAndIncludedCache.get(b) || false;
+
+            if (aIsIncluded !== bIsIncluded) {
+                return aIsIncluded ? -1 : 1;
+            } else if (aCanBeNextMoveAndIncluded !== bCanBeNextMoveAndIncluded) {
+                return aCanBeNextMoveAndIncluded ? -1 : 1;
+            } else {
+                return Moves.wilsonScore(b, sideToMove) - Moves.wilsonScore(a, sideToMove);
+            }
+        });
     }
 
     static sortByPopularity(moves: MoveData[]): MoveData[] {

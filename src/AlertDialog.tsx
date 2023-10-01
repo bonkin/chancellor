@@ -4,11 +4,13 @@ import {Component, Fragment} from 'react';
 interface AlertDialogProps {
     isDialogOpen: boolean;
     onClose: () => void;
+    title: string;
+    message: string;
 }
 
 class AlertDialog extends Component<AlertDialogProps> {
     render() {
-        let {isDialogOpen, onClose} = this.props;
+        const {isDialogOpen, onClose, title, message} = this.props;
         return (
             isDialogOpen && (
                 <Transition appear show={isDialogOpen} as={Fragment}>
@@ -40,12 +42,11 @@ class AlertDialog extends Component<AlertDialogProps> {
                                 <div
                                     className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
                                     <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
-                                        Access Token Missing
+                                        {title}
                                     </Dialog.Title>
                                     <div className="mt-2">
                                         <p className="text-sm text-gray-500">
-                                            It is recommended to log in to your Lichess account to use this app for an optimized experience.
-                                            Please be aware that both logged-in and guest users are subject to API rate limitations from Lichess.
+                                            {message}
                                         </p>
                                     </div>
                                     <div className="mt-4">

@@ -57,7 +57,7 @@ interface Score {
 
 export type SAN = string;
 export type FENKey = string;
-export type Annotation = '!' | '?' | '!!' | '??' | '!?' | '?!';
+export type Annotation = '!' | '?' | '!!' | '??' | '!?' | '?!' | '↑';
 
 const CLOUD_EVAL = process.env.REACT_APP_CLOUD_EVAL || 'http://127.0.0.1:9003/api/cloud-eval';
 const STOP_AT_ACCUMULATED_PROB = Number(process.env.REACT_APP_STOP_AT_ACCUMULATED_PROB) || 0.10;
@@ -105,6 +105,7 @@ class Lichess {
         incrementProgress: () => void,
         ratings: Rating[],
         speeds: ExplorerSpeed[],
+        includedPositions: Variant[],
     ): Promise<SearchResults> {
 
         incrementProgress();
@@ -129,6 +130,49 @@ class Lichess {
 
         const sign = ply % 2 === 0 ? 1 : -1;
         const sideToMove = ply % 2 === 0 ? 'white' : 'black';
+
+        // Exit condition: the position after opponent's move is in the included positions
+        if (includedPositions.some(included => ChessUtils.isTransposition(play, included.moves))) {
+            console.log(`Found included position (1) ${fenKey} after ${play.map(move => move.san).join(' ')}`);
+            return {
+                wcp: {
+                    engine: sideToMove === 'white' ? INF_CP : -INF_CP,
+                    statistics: sideToMove === 'white' ? WHITE_WIN_RATE : BLACK_WIN_RATE,
+                },
+                wwr: sideToMove === 'white' ? WHITE_WIN_RATE : BLACK_WIN_RATE,
+                variants: [],
+            }
+        }
+
+        // Exit condition: one of legal moves matches any of the included positions
+        const matchResult = ChessUtils.forEachLegalMove(play, (next: { san: string; uci: string; fenKey: FENKey }) => {
+            if (includedPositions.map(variant => ChessUtils.playToFEN(variant.moves).split(' ').slice(0, 4).join(' ')).includes(next.fenKey)) {
+                console.log(`Found included position (2) ${fenKey} after ${play.map(move => move.san).join(' ')}`);
+                return {
+                    wcp: {
+                        engine: sideToMove === 'white' ? INF_CP : -INF_CP,
+                        statistics: sideToMove === 'white' ? WHITE_WIN_RATE : BLACK_WIN_RATE,
+                    },
+                    wwr: sideToMove === 'white' ? WHITE_WIN_RATE : BLACK_WIN_RATE,
+                    variants: [{
+                        moves: [{
+                            uci: next.uci,
+                            san: next.san,
+                            averageRating: 1500,
+                            white: sideToMove === 'white' ? WHITE_WIN_RATE : BLACK_WIN_RATE,
+                            draws: 0,
+                            black: sideToMove === 'white' ? BLACK_WIN_RATE : WHITE_WIN_RATE,
+                            annotation: '↑',
+                        }],
+                        wwr: sideToMove === 'white' ? WHITE_WIN_RATE : BLACK_WIN_RATE,
+                        wcp: sideToMove === 'white' ? INF_CP : -INF_CP,
+                    }],
+                }
+            }
+        });
+        if (matchResult !== undefined) {
+            return matchResult;
+        }
 
         // Exit condition: probability too low
         if (probability < STOP_AT_ACCUMULATED_PROB) {
@@ -204,7 +248,8 @@ class Lichess {
             }
         }
 
-        const sortedMoves = await this.chessDataUtils.fetchMoves(play, 'us', ratings, speeds).then(Moves.sortByWinRate.bind(this, sideToMove));
+        const candidateMoves = await this.chessDataUtils.fetchMoves(play, 'us', ratings, speeds);
+        const sortedMoves = Moves.sortByIncludedMovesAndWinRate(candidateMoves, sideToMove, play, includedPositions);
         const totalMoveOccurrences = Moves.totalOccurrences(sortedMoves);
         let moves: MoveData[] = [];
         const moveEvaluations: { [key: string]: Evaluation[] | undefined } = {};
@@ -257,18 +302,18 @@ class Lichess {
                     evaluation = await this.evaluate(probability, [...play, move], BEFORE_OPP_MOVE_EVALUATION_MULTIPV);
                     moveEvaluations[move.san] = evaluation;
                 } else {
-                    console.log(`Local evaluation (1) cache hit for ${[...play, move].map(move => move.san).join(' ')}`);
+                    console.log(`Local evaluation cache hit for ${[...play, move].map(move => move.san).join(' ')}`);
                 }
                 if (evaluation?.[0] && positionEvaluation) {
                     const signedDiff = sign * (evaluation[0].wcp - positionEvaluation.wcp);
                     if (signedDiff < MIN_EVAL_DIFF_TO_CONSIDER) {
                         if (evaluation[0].bestSequence.length !== 0) {
                             Lichess.addPopularBlunderSequence(evaluation, play, move, popularBlunderSequences, signedDiff);
-                            console.log(`Removed: ${[...play, move].map(move => move.san).join(' ')} occurs ${(Moves.moveOccurrences(move) / totalMoveOccurrences * 100).toFixed(1)}%`);
+                            console.log(`Disapproved by the engine: ${[...play, move].map(move => move.san).join(' ')} occurs ${(Moves.moveOccurrences(move) / totalMoveOccurrences * 100).toFixed(1)}%`);
                         }
                     } else if (signedDiff >= 0) {
                         moves.push(move);
-                        console.log(`Added: ${[...play, move].map(move => move.san).join(' ')} occurs ${(Moves.moveOccurrences(move) / totalMoveOccurrences * 100).toFixed(1)}%`);
+                        console.log(`Suggested by the engine: ${[...play, move].map(move => move.san).join(' ')} occurs ${(Moves.moveOccurrences(move) / totalMoveOccurrences * 100).toFixed(1)}%`);
                     }
                 }
             }
@@ -306,7 +351,7 @@ class Lichess {
                 move.popularBlunderSequences = popularBlunderSequences;
             }
 
-            for (const opponentMove of opponentMoves) {
+            for (const [index, opponentMove] of opponentMoves.entries()) {
                 const nextNextPlay = [...nextPlay, opponentMove];
                 const nextNextFen = ChessUtils.playToFEN(nextNextPlay);
                 const moveFrequency = Moves.moveOccurrences(opponentMove) / totalOppMoveOccurrences;
@@ -316,7 +361,19 @@ class Lichess {
                 if (totalOppMoveOccurrences === 1) {
                     nextProbability = 0;
                 }
-                const result: SearchResults = await this.search(nextProbability, ply + 2, nextNextPlay, [...positions, fenKey], startMoves, nextNextFen, setShapes, incrementProgress, ratings, speeds);
+                const result: SearchResults = await this.search(
+                    nextProbability,
+                    ply + 2,
+                    nextNextPlay,
+                    [...positions, fenKey],
+                    startMoves,
+                    nextNextFen,
+                    setShapes,
+                    incrementProgress,
+                    ratings,
+                    speeds,
+                    includedPositions,
+                );
                 const wcp: number = result.wcp.statistics;
                 const wwr: number = result.wwr;
                 scores.push({wcp: wcp * moveFrequency, wwr: wwr * moveFrequency});
@@ -514,7 +571,7 @@ class Lichess {
         const response = await NetworkRequestUtils.fetchWithRetry(CLOUD_EVAL + `?fen=${encodeURIComponent(fen)}&multiPv=${multiPV}`, this.lichessAccessToken, true, {method: 'GET'});
 
         if (!response.ok) {
-            console.log(" -");
+            console.log(` -- no response for ${fen} --`);
             return undefined;
         }
 
@@ -523,7 +580,7 @@ class Lichess {
         // console.log(JSON.stringify(json));
 
         if (!json.pvs || json.pvs.length === 0) {
-            console.log(" --");
+            console.log(`  -- no pvs for ${fen} --`);
             console.log(JSON.stringify(json));
             return undefined;
         }

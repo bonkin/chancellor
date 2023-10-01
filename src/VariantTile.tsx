@@ -6,13 +6,14 @@ interface VariantTileProps {
     variant: Variant;
     index: number;
     totalVariants: number;
+    isIncludedPosition: boolean;
     onMoveClick: (pv: MoveData[]) => void;
 }
 
-const VariantTile: React.FC<VariantTileProps> = ({variant, index, totalVariants, onMoveClick}) => {
+const VariantTile: React.FC<VariantTileProps> = ({variant, index, totalVariants, isIncludedPosition, onMoveClick}) => {
     return (
         <div
-            className="p-3 m-2 rounded-sm bg-blue-50 hover:shadow-lg"
+            className={`p-3 m-2 rounded-sm hover:shadow-lg ${isIncludedPosition ? 'bg-green-50' : 'bg-blue-50'}`}
             style={{position: 'relative'}}
         >
             <sup style={{position: 'absolute', top: '5px', left: '5px', fontSize: '0.6em', color: 'navy'}}>
